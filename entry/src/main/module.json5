@@ -1,0 +1,118 @@
+{
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "description": "$string:module_desc",
+    "mainElement": "EntryAbility",
+    "deviceTypes": [
+      "phone",
+      "tablet",
+      "2in1"
+    ],
+    "deliveryWithInstall": true,
+    "installationFree": false,
+    "pages": "$profile:main_pages",
+    /*
+     * 网络权限：调用 DeepSeek 云侧 AI 必需。
+     * GET_NETWORK_INFO 用于在断网时提前降级到本地规则引擎，避免演示时卡住等超时。
+     * 三者均为 system_grant 级别，安装即生效，不会弹窗。
+     *
+     * PUBLISH_AGENT_REMINDER：节奏哨兵把节点排成**系统级代理提醒**所需。
+     * 这是普通权限（不是 system_basic / 不是受限权限），无需在 AGC 申请权益、无需重签 Profile ——
+     * 与实况窗那套资质门槛完全是两回事，所以哨兵能做到"应用不打开也能提醒"。
+     */
+    "requestPermissions": [
+      {
+        "name": "ohos.permission.INTERNET"
+      },
+      {
+        "name": "ohos.permission.GET_NETWORK_INFO"
+      },
+      {
+        "name": "ohos.permission.PUBLISH_AGENT_REMINDER"
+      },
+      {
+        /*
+         * 语音速记（端侧离线）。
+         * ⚠ 这是 user_grant 权限：只写在这里**不够**，运行时还必须 requestPermissionsFromUser。
+         *   漏了动态申请不会报错 —— 录音器照样创建成功，只是 readData 一帧都不来，
+         *   "看着正常、实际没声音"最难查，所以 VoiceMemo.ensureMic() 每次都会显式问一次。
+         * reason 是必填项：系统弹窗上要显示给用户看，不能省。
+         */
+        "name": "ohos.permission.MICROPHONE",
+        "reason": "$string:mic_reason",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      }
+    ],
+    "abilities": [
+      {
+        "name": "EntryAbility",
+        "srcEntry": "./ets/entryability/EntryAbility.ets",
+        "description": "$string:EntryAbility_desc",
+        "icon": "$media:layered_image",
+        "label": "$string:EntryAbility_label",
+        "startWindowIcon": "$media:startIcon",
+        "startWindowBackground": "$color:start_window_background",
+        /*
+         * 跟随系统旋转。
+         * 不写这一行时应用默认锁竖屏 —— 平板/折叠屏上用户把设备转过来界面不转，
+         * "多端适配"就只剩个说法。横屏也正是触发宽屏双栏的路径之一
+         * （1256×2760 的机器横过来是 ≈920vp，超过 840 的双栏断点）。
+         */
+        "orientation": "auto_rotation",
+        "exported": true,
+        "skills": [
+          {
+            "entities": [
+              "entity.system.home"
+            ],
+            "actions": [
+              "ohos.want.action.home"
+            ]
+          }
+        ]
+      }
+    ],
+    "extensionAbilities": [
+      {
+        /*
+         * 桌面服务卡片（Form Kit）。
+         * 卡片是「灯塔」的主入口，不是装饰 —— 用户不开应用就能看到最近的节点倒计时。
+         *
+         * ⚠ 卡片跑在独立的 FormExtension 进程，与 UIAbility 不共享内存。
+         *   所以：① 它要自己 init 一次 RDB；② App 写库后必须主动 reloadForms，
+         *   否则桌面显示的是过期数据（同类作品最常见的翻车点）。
+         */
+        "name": "EntryFormAbility",
+        "srcEntry": "./ets/entryformability/EntryFormAbility.ets",
+        "label": "$string:widget_label",
+        "description": "$string:widget_desc",
+        "type": "form",
+        "exported": false,
+        "metadata": [
+          {
+            "name": "ohos.extension.form",
+            "resource": "$profile:form_config"
+          }
+        ]
+      },
+      {
+        "name": "EntryBackupAbility",
+        "srcEntry": "./ets/entrybackupability/EntryBackupAbility.ets",
+        "type": "backup",
+        "exported": false,
+        "metadata": [
+          {
+            "name": "ohos.extension.backup",
+            "resource": "$profile:backup_config"
+          }
+        ],
+      }
+    ]
+  }
+}
