@@ -1,0 +1,40 @@
+{
+  "color": [
+    {
+      "name": "start_window_background",
+      "value": "#0A1120"
+    },
+    {
+      "name": "card_title",
+      "value": "#EDF2FA"
+    },
+    {
+      "name": "card_sub",
+      "value": "#9AABC4"
+    },
+    {
+      "name": "card_faint",
+      "value": "#6B7C96"
+    },
+    {
+      "name": "card_line",
+      "value": "#2A3850"
+    },
+    {
+      "name": "card_accent",
+      "value": "#4A9EFF"
+    },
+    {
+      "name": "card_warn",
+      "value": "#FFB020"
+    },
+    {
+      "name": "card_ok",
+      "value": "#3DD68C"
+    },
+    {
+      "name": "card_plus_bg",
+      "value": "#1E2A45"
+    }
+  ]
+}
