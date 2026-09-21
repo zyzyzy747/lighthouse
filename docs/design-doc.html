@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>灯塔 Lighthouse · 作品设计文档 | 2026 光谷杯鸿蒙生态创新大赛</title>
+<style>
+  :root{
+    --bg:#080c16;
+    --bg2:#0c1220;
+    --panel:#101827;
+    --panel2:#141d2f;
+    --line:#1d2a42;
+    --line2:#28374f;
+    --tx:#e8eef8;
+    --tx2:#9db0cc;
+    --tx3:#6b7f9e;
+    --gold:#ffb454;
+    --cyan:#4fd1c5;
+    --blue:#5b9dff;
+    --red:#ff6b6b;
+    --green:#5ddc7f;
+    --purple:#b18cff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);
+    color:var(--tx);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    line-height:1.75;
+    font-size:15px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px 120px}
+
+  /* ---------- 顶部光束 ---------- */
+  .hero{
+    position:relative;
+    padding:88px 0 64px;
+    overflow:hidden;
+  }
+  .hero::before{
+    content:"";
+    position:absolute;top:-260px;left:50%;transform:translateX(-50%);
+    width:760px;height:760px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,180,84,.14) 0%,rgba(91,157,255,.06) 42%,transparent 68%);
+    pointer-events:none;
+  }
+  .hero-inner{position:relative;z-index:1}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:9px;
+    font-size:12.5px;letter-spacing:.14em;color:var(--gold);
+    border:1px solid rgba(255,180,84,.32);
+    background:rgba(255,180,84,.07);
+    padding:6px 14px;border-radius:100px;margin-bottom:26px;
+  }
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 10px var(--gold)}
+  h1{
+    font-size:clamp(38px,6.4vw,62px);
+    line-height:1.1;letter-spacing:-.02em;font-weight:800;
+    background:linear-gradient(96deg,#fff 0%,#ffd9a0 38%,#7fc4ff 78%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    margin-bottom:14px;
+  }
+  .sub{font-size:20px;color:var(--tx2);font-weight:500;letter-spacing:.02em;margin-bottom:34px}
+  .slogan{
+    border-left:3px solid var(--gold);
+    padding:14px 0 14px 20px;margin-bottom:38px;
+    font-size:17.5px;color:#ffd9a0;font-weight:600;line-height:1.7;
+  }
+  .slogan small{display:block;color:var(--tx3);font-size:13.5px;font-weight:400;margin-top:7px;letter-spacing:.02em}
+
+  .meta-grid{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));
+    gap:1px;background:var(--line);border:1px solid var(--line);
+    border-radius:14px;overflow:hidden;
+  }
+  .meta-item{background:var(--panel);padding:17px 19px}
+  .meta-item .k{font-size:11.5px;color:var(--tx3);letter-spacing:.1em;margin-bottom:6px;text-transform:uppercase}
+  .meta-item .v{font-size:15px;color:var(--tx);font-weight:600}
+  .meta-item .v.warn{color:var(--red)}
+
+  /* ---------- 通用区块 ---------- */
+  section{margin-top:76px;scroll-margin-top:28px}
+  .sec-head{display:flex;align-items:baseline;gap:15px;margin-bottom:28px;padding-bottom:15px;border-bottom:1px solid var(--line)}
+  .sec-num{
+    font-size:13px;font-weight:700;color:var(--gold);
+    font-variant-numeric:tabular-nums;letter-spacing:.06em;
+    padding-top:3px;
+  }
+  .sec-head h2{font-size:26px;font-weight:700;letter-spacing:-.01em}
+  .sec-head .note{margin-left:auto;font-size:12.5px;color:var(--tx3);white-space:nowrap}
+
+  h3{font-size:17.5px;font-weight:650;margin:32px 0 13px;color:#fff;display:flex;align-items:center;gap:9px}
+  h3::before{content:"";width:3px;height:15px;border-radius:2px;background:var(--gold);flex:none}
+  h4{font-size:15px;font-weight:650;margin:20px 0 9px;color:var(--cyan)}
+  p{color:var(--tx2);margin-bottom:13px}
+  p strong,li strong{color:var(--tx);font-weight:650}
+  ul,ol{color:var(--tx2);padding-left:22px;margin-bottom:14px}
+  li{margin-bottom:7px}
+  code{
+    background:rgba(91,157,255,.11);color:#9fc7ff;
+    padding:2px 7px;border-radius:5px;font-size:13px;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  }
+
+  .card{
+    background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:22px 24px;margin:18px 0;
+  }
+  .card.tint{background:linear-gradient(160deg,rgba(255,180,84,.055),rgba(91,157,255,.035));border-color:var(--line2)}
+  .card.alert{border-color:rgba(255,107,107,.3);background:rgba(255,107,107,.05)}
+
+  /* ---------- 表格 ---------- */
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:13.5px}
+  th{
+    text-align:left;padding:11px 13px;background:var(--panel2);
+    color:var(--tx2);font-weight:600;font-size:12.5px;letter-spacing:.04em;
+    border-bottom:1px solid var(--line2);
+  }
+  td{padding:11px 13px;border-bottom:1px solid var(--line);color:var(--tx2);vertical-align:top}
+  tr:hover td{background:rgba(91,157,255,.03)}
+  td.hi{color:var(--tx);font-weight:600}
+
+  /* ---------- 痛点列表 ---------- */
+  .pain{display:grid;gap:13px;margin:20px 0}
+  .pain-item{
+    display:grid;grid-template-columns:44px 1fr;gap:16px;
+    background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:18px 20px;
+  }
+  .pain-item .n{
+    font-size:22px;font-weight:800;color:rgba(255,180,84,.42);
+    font-variant-numeric:tabular-nums;line-height:1.3;
+  }
+  .pain-item h4{margin:0 0 6px;color:#fff;font-size:15.5px}
+  .pain-item p{margin:0;font-size:13.5px;color:var(--tx2)}
+
+  /* ---------- 数据条 ---------- */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin:22px 0}
+  .stat{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:17px 18px;position:relative;overflow:hidden;
+  }
+  .stat::after{content:"";position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold),transparent)}
+  .stat .num{font-size:26px;font-weight:800;color:var(--gold);letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.25}
+  .stat .num.c{color:var(--cyan)}
+  .stat .num.b{color:var(--blue)}
+  .stat .lbl{font-size:12.5px;color:var(--tx2);margin-top:5px;line-height:1.5}
+  .stat .src{font-size:11px;color:var(--tx3);margin-top:6px}
+
+  /* ---------- 功能卡 ---------- */
+  .feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;margin:20px 0}
+  .feat-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    padding:20px;display:flex;flex-direction:column;
+  }
+  .feat-card .tag{
+    align-self:flex-start;font-size:11px;letter-spacing:.08em;font-weight:700;
+    padding:3px 9px;border-radius:5px;margin-bottom:11px;
+  }
+  .tag.p0{background:rgba(255,107,107,.14);color:#ff9b9b}
+  .tag.p1{background:rgba(79,209,197,.14);color:#7ee3d8}
+  .tag.p2{background:rgba(177,140,255,.14);color:#c9b0ff}
+  .feat-card h4{margin:0 0 8px;color:#fff;font-size:16px}
+  .feat-card p{font-size:13.5px;margin-bottom:11px}
+  .feat-card .why{font-size:12.5px;color:var(--tx3);border-top:1px dashed var(--line2);padding-top:11px;margin-top:auto}
+  .feat-card .why b{color:var(--gold);font-weight:600}
+
+  /* ---------- 时间线 ---------- */
+  .tl{position:relative;padding-left:26px;margin:20px 0}
+  .tl::before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:1px;background:linear-gradient(180deg,var(--gold),var(--blue),transparent)}
+  .tl-item{position:relative;margin-bottom:20px}
+  .tl-item::before{
+    content:"";position:absolute;left:-24px;top:7px;width:9px;height:9px;border-radius:50%;
+    background:var(--bg);border:2px solid var(--gold);
+  }
+  .tl-item .t{font-size:12px;color:var(--gold);font-weight:700;letter-spacing:.06em;font-variant-numeric:tabular-nums}
+  .tl-item .d{color:var(--tx);font-weight:600;font-size:14.5px;margin:3px 0 3px}
+  .tl-item .x{font-size:13px;color:var(--tx2)}
+
+  /* ---------- 甘特 ---------- */
+  .gantt{margin:22px 0;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--panel)}
+  .gantt-row{display:grid;grid-template-columns:132px repeat(12,1fr);border-bottom:1px solid var(--line);min-height:42px;align-items:center}
+  .gantt-row:last-child{border-bottom:none}
+  .gantt-row.head{background:var(--panel2);min-height:auto}
+  .gantt-row.head > div{font-size:11px;color:var(--tx3);text-align:center;padding:9px 0;font-weight:600}
+  .gantt-row.head > div:first-child{text-align:left;padding-left:16px}
+  .gantt-row > .label{
+    font-size:12.5px;color:var(--tx);padding:11px 0 11px 16px;
+    border-right:1px solid var(--line);display:flex;align-items:center;font-weight:600;
+    grid-column:1;
+  }
+  .gantt-bar{
+    margin:8px 3px;border-radius:5px;height:25px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:10.5px;color:#08101d;font-weight:700;white-space:nowrap;overflow:hidden;
+  }
+  .g1{background:linear-gradient(90deg,#4fd1c5,#63e0d4)}
+  .g2{background:linear-gradient(90deg,#ffb454,#ffcd85)}
+  .g3{background:linear-gradient(90deg,#5b9dff,#8bbdff)}
+  .g4{background:linear-gradient(90deg,#b18cff,#c9b0ff)}
+  .g5{background:linear-gradient(90deg,#ff6b6b,#ff9b9b);color:#fff}
+
+  /* ---------- 多端示意 ---------- */
+  .devices{display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:16px;margin:24px 0;align-items:start}
+  .dev{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;
+    text-align:center;
+  }
+  .dev .name{font-size:13px;font-weight:700;color:var(--gold);margin-bottom:12px;letter-spacing:.05em}
+  .dev .screen{
+    border:2px solid var(--line2);border-radius:9px;
+    background:var(--bg2);padding:9px;min-height:200px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .dev .screen.tall{min-height:260px;border-radius:16px}
+  .dev .screen.wide{min-height:180px}
+  .blk{background:rgba(91,157,255,.13);border:1px solid rgba(91,157,255,.24);border-radius:5px;height:22px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#8fb8f0}
+  .blk.gold{background:rgba(255,180,84,.14);border-color:rgba(255,180,84,.3);color:#e8b878}
+  .blk.cy{background:rgba(79,209,197,.13);border-color:rgba(79,209,197,.28);color:#79cfc5}
+  .blk.tall{height:44px}
+  .blk.big{height:70px}
+  .dev .desc{font-size:12px;color:var(--tx3);margin-top:12px;text-align:left;line-height:1.65}
+  @media(max-width:820px){
+    .devices{grid-template-columns:1fr}
+    .gantt-row{grid-template-columns:96px repeat(12,1fr)}
+  }
+
+  /* ---------- 分镜 ---------- */
+  .shot{display:grid;grid-template-columns:76px 1fr;gap:16px;padding:16px 0;border-bottom:1px solid var(--line)}
+  .shot:last-child{border-bottom:none}
+  .shot .time{
+    font-size:12.5px;color:var(--cyan);font-weight:700;
+    font-variant-numeric:tabular-nums;padding-top:2px;
+  }
+  .shot .body h4{margin:0 0 5px;font-size:14.5px;color:#fff}
+  .shot .body p{margin:0 0 6px;font-size:13px}
+  .shot .body .vo{
+    font-size:12.5px;color:var(--gold);background:rgba(255,180,84,.06);
+    border-left:2px solid rgba(255,180,84,.4);padding:7px 11px;border-radius:0 6px 6px 0;margin-top:7px;
+  }
+  .shot .body .vo::before{content:"旁白｜";opacity:.65}
+
+  /* ---------- QA ---------- */
+  .qa{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:19px 21px;margin:13px 0}
+  .qa .q{color:#fff;font-weight:650;font-size:14.5px;margin-bottom:9px;display:flex;gap:9px}
+  .qa .q span{color:var(--red);font-weight:800;flex:none}
+  .qa .a{font-size:13.5px;color:var(--tx2);padding-left:22px;border-left:2px solid var(--line2)}
+
+  /* ---------- 清单 ---------- */
+  .check{list-style:none;padding:0}
+  .check li{display:flex;gap:11px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13.5px;align-items:flex-start}
+  .check li:last-child{border-bottom:none}
+  .check li::before{content:"□";color:var(--gold);font-size:16px;line-height:1.4;flex:none}
+
+  /* ---------- 提示条 ---------- */
+  .callout{
+    display:flex;gap:13px;background:rgba(91,157,255,.07);
+    border:1px solid rgba(91,157,255,.22);border-radius:11px;
+    padding:15px 18px;margin:18px 0;font-size:13.5px;color:#a9c4e8;
+  }
+  .callout.warn{background:rgba(255,107,107,.06);border-color:rgba(255,107,107,.26);color:#f0b3b3}
+  .callout.ok{background:rgba(93,220,127,.06);border-color:rgba(93,220,127,.24);color:#adddbb}
+  .callout .ico{font-size:16px;flex:none;line-height:1.6}
+  .callout b{color:#fff}
+
+  .footer{margin-top:88px;padding-top:26px;border-top:1px solid var(--line);font-size:12.5px;color:var(--tx3);text-align:center;line-height:2}
+  .srcs{font-size:11.5px;color:var(--tx3);line-height:1.9;padding-left:18px}
+  .srcs li{margin-bottom:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ==================== 封面 ==================== -->
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow"><span class="dot"></span>2026 第二届「光谷杯」鸿蒙生态创新大赛 · 赛道一 APP 鸿蒙创新应用</div>
+    <h1>灯塔 Lighthouse</h1>
+    <div class="sub">秋招数据作战台 —— 把求职从一场豪赌，变成一场可度量的实验</div>
+    <div class="slogan">
+      给每一版简历建账，给每一次面试留痕，<br>
+      用一张能力雷达图告诉你：问题不在你不够努力，而在你不知道哪里不行。
+      <small>在光谷，为每一个追光的毕业生点亮一盏灯。</small>
+    </div>
+    <div class="meta-grid">
+      <div class="meta-item"><div class="k">作品提交截止</div><div class="v warn">2026-09-30</div></div>
+      <div class="meta-item"><div class="k">剩余可用时间</div><div class="v warn">12 天</div></div>
+      <div class="meta-item"><div class="k">技术底座</div><div class="v">HarmonyOS 5.0+</div></div>
+      <div class="meta-item"><div class="k">开发方式</div><div class="v">ArkTS / ArkUI 原生</div></div>
+      <div class="meta-item"><div class="k">团队规模</div><div class="v">1 人独立开发</div></div>
+      <div class="meta-item"><div class="k">验证环境</div><div class="v">DevEco Studio 模拟器</div></div>
+    </div>
+  </div>
+</header>
+
+<!-- ==================== 一句话创意 ==================== -->
+<section id="oneline">
+  <div class="sec-head">
+    <span class="sec-num">00</span>
+    <h2>一句话创意</h2>
+    <span class="note">对应官方提交项 ①「创意描述」</span>
+  </div>
+  <div class="card tint" style="padding:28px 30px">
+    <p style="font-size:17.5px;color:#fff;line-height:1.85;margin:0;font-weight:500">
+      「灯塔」把应届生最焦虑的秋招，改造成一套<b>数据驱动的决策系统</b>——用<b>桌面服务卡片</b>把秋招进度钉在手机主屏，
+      用<b>一次开发多端部署</b>把手机、平板、折叠屏变成同一个作战台，用<b>能力雷达图</b>把"面完就忘"的模糊挫败感变成一张能照着补的短板清单。
+    </p>
+  </div>
+  <div class="callout">
+    <span class="ico">◈</span>
+    <div>这句话里出现了三个鸿蒙关键词：<b>服务卡片</b>、<b>一次开发多端部署</b>、<b>折叠屏悬停</b>。评委在 30 秒内就能判断"这是不是鸿蒙原生作品"——这是抢创新性分的第一步。</div>
+  </div>
+</section>
+
+<!-- ==================== 01 速览 ==================== -->
+<section id="overview">
+  <div class="sec-head"><span class="sec-num">01</span><h2>作品速览</h2></div>
+  <table>
+    <tr><th style="width:118px">项目</th><th>内容</th></tr>
+    <tr><td class="hi">作品形态</td><td>手机应用 + 桌面服务卡片，两种形态一体（同一份工程）</td></tr>
+    <tr><td class="hi">解决的问题</td><td>应届生求职"投递是黑盒、面试不复盘、节奏靠记忆"三大失能</td></tr>
+    <tr><td class="hi">目标用户</td><td>2027 届应届毕业生（主）；高校就业指导中心（次）</td></tr>
+    <tr><td class="hi">核心创新</td><td>把"简历版本 / 面试表现"当作可 A&nbsp;B 测试的对象，用数据反推改进行动</td></tr>
+    <tr><td class="hi">鸿蒙依赖度</td><td>高 —— 服务卡片不是装饰，是产品主交互入口；多端形态不是兼容，是核心卖点。脱离鸿蒙无法成立</td></tr>
+    <tr><td class="hi">演示方式</td><td>模拟器录屏（手机 / 平板 / 折叠屏 三种形态）</td></tr>
+  </table>
+
+  <div class="callout ok">
+    <span class="ico">◈</span>
+    <div><b>为什么这个方向天然适合你：</b>你就是 2027 届、你正在秋招、你投过简历、你为八股焦虑过。答辩时你说的每一句话都是第一人称事实，而不是二手调研。这是任何团队都复制不了的答辩优势。</div>
+  </div>
+</section>
+
+<!-- ==================== 02 创意背景 ==================== -->
+<section id="background">
+  <div class="sec-head"><span class="sec-num">02</span><h2>创意背景与痛点</h2></div>
+
+  <h3>起点：一个计算机大四学生的秋招日常</h3>
+  <p>
+    投了 30 多家，手机里躺着四个东西：一个记投递的 Excel、一个存 JD 截图的相册、一个名叫「八股」的备忘录、
+    以及一个每天刷三次却始终没有红点的邮箱。秋招进行到一半，真正折磨人的已经不是"没 offer"，
+    而是<b>完全不知道自己卡在哪一环</b>——是简历没被看见？是笔试差一点？还是面试表达不行？
+  </p>
+  <p>
+    这种状态有个准确的名字：<b>无反馈的努力</b>。学生做的最常见应对是"再海投 50 家"，
+    结果是把同一个错误重复 50 次。
+  </p>
+
+  <h3>三个被现有工具忽视的痛点</h3>
+  <div class="pain">
+    <div class="pain-item">
+      <div class="n">01</div>
+      <div>
+        <h4>投递是黑盒：投了几十份零面试，归因全靠猜</h4>
+        <p>市面上的求职 APP 都在做"岗位聚合"（把更多岗位推给你），但没人做"投递结果归因"。学生无法回答一个最基本的问题：<b>我这一版简历，到底有没有在起作用？</b>改简历全凭感觉，改完还是投同一个黑洞。</p>
+      </div>
+    </div>
+    <div class="pain-item">
+      <div class="n">02</div>
+      <div>
+        <h4>面试不复盘：同一个知识点能栽三次</h4>
+        <p>面完一场，情绪耗尽，什么都不想记。两周后下一场面试，被问到同类问题依然卡壳。<b>面试产生的信息是这个阶段最贵的资产，却在 24 小时内蒸发。</b>没有结构化的复盘手段，也就没有"补强清单"，学生只能泛泛地"再刷点八股"，效率极低。</p>
+      </div>
+    </div>
+    <div class="pain-item">
+      <div class="n">03</div>
+      <div>
+        <h4>节奏靠记忆：秋招窗口在压缩，岗位"招满即下架"</h4>
+        <p>2026 年秋招的一个显著变化是节奏前移与集中：头部企业正式批在 8 月底至 9 月初开启，<b>部分核心岗位开启后一到两周即招满关闭</b>。学生的笔试、面试、投递截止日期散落在十几个平台通知里，靠脑子记必然漏，而漏掉的每一个都可能是一个 offer。</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>数据支撑</h3>
+  <div class="stats">
+    <div class="stat">
+      <div class="num">1300<span style="font-size:15px">万+</span></div>
+      <div class="lbl">2027 届高校毕业生规模预计</div>
+      <div class="src">人民政协网 2026-08-13</div>
+    </div>
+    <div class="stat">
+      <div class="num c">17.9<span style="font-size:15px">%</span></div>
+      <div class="lbl">16–24 岁城镇调查失业率（2026 年 7 月）</div>
+      <div class="src">国家统计局 2026-08-17</div>
+    </div>
+    <div class="stat">
+      <div class="num b">1.69<span style="font-size:15px">倍</span></div>
+      <div class="lbl">秋招需求量相对次年春招的倍数</div>
+      <div class="src">前程无忧《2026 企业招聘行情洞察》</div>
+    </div>
+    <div class="stat">
+      <div class="num" style="color:var(--purple)">1200<span style="font-size:15px">万+</span></div>
+      <div class="lbl">教育部「金秋启航」汇集岗位信息数</div>
+      <div class="src">教育部 2025-09-27 启动</div>
+    </div>
+  </div>
+
+  <h3>政策贴合：踩在"高质量充分就业"上</h3>
+  <ul>
+    <li><b>"十五五"规划首次将"高质量充分就业"纳入地方绩效考核</b>，重大项目须附就业影响评估 —— 就业已从民生议题升级为地方政府的考核指标。</li>
+    <li>多部门联合新政：新增城乡社区岗位原则上全部面向高校毕业生开放。</li>
+    <li>教育部 2026 届"金秋启航"校园招聘月持续开展，"就业优先战略持续深化"。</li>
+  </ul>
+  <div class="callout">
+    <span class="ico">◈</span>
+    <div>这三条决定了「前景评估」20 分里"社会价值"一项的得分。评委席上有政府领导，<b>把作品和"高质量充分就业"这个明确的政策抓手挂钩，比堆功能有用得多</b>。</div>
+  </div>
+</section>
+
+<!-- ==================== 03 目标用户 ==================== -->
+<section id="user">
+  <div class="sec-head"><span class="sec-num">03</span><h2>目标用户与使用场景</h2></div>
+
+  <h3>主用户：2027 届应届毕业生</h3>
+  <table>
+    <tr><th style="width:96px">特征</th><th>描述</th></tr>
+    <tr><td class="hi">身份</td><td>本科/硕士应届生，2026 年 8 月—11 月处于秋招正式批</td></tr>
+    <tr><td class="hi">投递量</td><td>中等强度求职者 20–80 家，海投型可达 150+ 家</td></tr>
+    <tr><td class="hi">痛点强度</td><td>极度焦虑但极度缺乏反馈，愿意为"确定性"付出任何工具成本</td></tr>
+    <tr><td class="hi">设备</td><td>鸿蒙手机为主，部分拥有平板/折叠屏</td></tr>
+    <tr><td class="hi">使用频次</td><td>高频：每天查看 3–5 次；关键节点（笔试/面试）当天使用 10+ 次</td></tr>
+  </table>
+
+  <h3>次用户：高校就业指导中心</h3>
+  <p>报告与就业指导课程反复强调"把海投变成小实验""建立投递进度表""简历诊断应成为标配训练项"，但目前没有支撑工具。灯塔的<b>数据看板</b>形态可以延伸为就业中心的班级/学院求职态势视图（本期不做，写在展望里）。</p>
+
+  <h3>典型使用瞬间</h3>
+  <div class="tl">
+    <div class="tl-item">
+      <div class="t">AM 08:12 · 地铁上</div>
+      <div class="d">锁屏上一条通知 + 桌面卡片："14:00 XX 公司 一面 · 还有 5 小时 48 分"</div>
+      <div class="x">不用打开任何 App，不用解锁翻备忘录。倒计时跟着卡片常驻在主屏，重要节点再用通知推一次。这是"服务找人"。</div>
+    </div>
+    <div class="tl-item">
+      <div class="t">AM 10:30 · 课间 20 秒</div>
+      <div class="d">投完一家 → 回到桌面点卡片上的「＋」→ 3 秒录完一条投递</div>
+      <div class="x">卡片上就是入口。求职记录的动作必须短到可以在两个教室之间完成，否则一定断在第三天。</div>
+    </div>
+    <div class="tl-item">
+      <div class="t">PM 14:00 · 面试前 10 分钟</div>
+      <div class="d">折叠屏展开悬停 → 上半屏是这家公司的 JD 关键词与上次面试短板，下半屏是倒计时与速记区</div>
+      <div class="x">折成"笔记本电脑"形态立在桌上，正是线上面试的物理姿势。</div>
+    </div>
+    <div class="tl-item">
+      <div class="t">PM 16:30 · 面试结束 5 分钟内</div>
+      <div class="d">趁着记忆还热，勾选本次被问到的知识点与自评掌握度 → 雷达图实时更新</div>
+      <div class="x">把复盘压缩到 90 秒内，是这件事能持续下去的唯一前提。</div>
+    </div>
+    <div class="tl-item">
+      <div class="t">周末 · 复盘时刻</div>
+      <div class="d">平板打开作战地图 → 看见"投递 42 / 回复 6 / 简历版 B 回复率是版 A 的 3 倍"</div>
+      <div class="x">这一刻用户第一次拿到了"反馈"。产品价值在此时兑现。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 04 核心功能 ==================== -->
+<section id="feature">
+  <div class="sec-head"><span class="sec-num">04</span><h2>核心功能设计</h2><span class="note">砍到 12 天能做完的范围</span></div>
+
+  <div class="callout warn">
+    <span class="ico">◈</span>
+    <div><b>范围纪律：</b>本作品按 1 人 × 12 天 × 每天 6 小时 ≈ 70 工时设计。<b>凡是需要后端服务、需要外部数据抓取、需要真机传感器的功能，一律不做</b>——不是不想做，是做了就是半成品，而完备度占 20 分。</div>
+  </div>
+
+  <section style="margin-top:26px">
+    <h3>MVP 四件套（必须全部完成）</h3>
+    <div class="feat">
+      <div class="feat-card">
+        <span class="tag p0">P0 · 数据入口</span>
+        <h4>① 投递快记</h4>
+        <p>从桌面卡片直达，3 秒完成一条投递记录：公司 / 岗位 / 渠道 / 简历版本 / 当前状态。提供快捷标签与键盘上推即存的交互。</p>
+        <div class="why"><b>为什么是 3 秒：</b>记录类产品的死亡原因永远是"太麻烦，明天再记"。所有设计让位于缩短录入路径。</div>
+      </div>
+      <div class="feat-card">
+        <span class="tag p0">P0 · 可视化</span>
+        <h4>② 作战地图</h4>
+        <p>把全部投递渲染成漏斗 + 时间轴的复合视图：投递 → 已读 → 笔试 → 一面 → 二面 → Offer，每一层标注转化率，异常节点自动标红。</p>
+        <div class="why"><b>这是全片的视觉钩子：</b>手机上是紧凑列表，平板上一展开就是一张完整的作战地图，两个形态差异极大——一多部署的价值一眼可见。</div>
+      </div>
+      <div class="feat-card">
+        <span class="tag p0">P0 · 产品灵魂</span>
+        <h4>③ 面试复盘 → 能力雷达</h4>
+        <p>面试后 90 秒勾选"被问到什么 + 我答得如何"，累积生成能力雷达图，自动排出<b>最该补的 3 个短板</b>并给出补强顺序。</p>
+        <div class="why"><b>这是本作品真正的创新点：</b>把"我好像哪里都不行"的弥散焦虑，收敛成一张能照着执行的清单。市面上没有任何求职产品在做这件事。</div>
+      </div>
+      <div class="feat-card">
+        <span class="tag p0">P0 · 鸿蒙特色</span>
+        <h4>④ 节奏哨兵</h4>
+        <p>投递截止 / 笔试 / 面试三类节点统一进入提醒体系：桌面卡片常驻显示最近 3 个节点与实时倒计时，临近节点由<b>本地通知</b>推到锁屏与横幅。</p>
+        <div class="why"><b>对应"岗位招满即下架"的现实：</b>错过的截止日期是真实的 offer 损失，这个功能的付费意愿最强。</div>
+      </div>
+    </div>
+  </section>
+
+  <h3>加分项（做完 MVP 有余力才碰）</h3>
+  <div class="feat">
+    <div class="feat-card">
+      <span class="tag p1">P1</span>
+      <h4>⑤ 简历版本 A/B 对比</h4>
+      <p>同一份简历的不同版本分别追踪回复率，并排对比"改了什么 → 结果有什么变化"。</p>
+      <div class="why">这是"把海投变成小实验"最直接的落地形式，若时间允许优先做它。</div>
+    </div>
+    <div class="feat-card">
+      <span class="tag p2">P2</span>
+      <h4>⑥ JD 匹配度速诊</h4>
+      <p>粘贴 JD 文本，本地关键词提取后与能力雷达比对，输出"匹配度 + 该补什么"。</p>
+      <div class="why">纯本地规则实现，不依赖大模型接口，可控性强。</div>
+    </div>
+  </div>
+
+  <h3 style="color:#ff9b9b">明确不做（红线清单）</h3>
+  <ul>
+    <li><b>不做账号体系与云同步</b> —— 纯本地存储。数据敏感（薪资、简历），本地化反而是卖点。</li>
+    <li><b>不做岗位抓取 / 爬虫</b> —— 合规风险 + 时间不可控。</li>
+    <li><b>不接大模型 API</b> —— 网络依赖 + 成本 + 演示不可控，12 天内是负债。</li>
+    <li><b>不碰 NFC / 扫码 / 相机 / 分布式协同</b> —— 模拟器不支持，演示不出来的能力等于不存在。</li>
+  </ul>
+</section>
+
+<!-- ==================== 05 鸿蒙能力矩阵 ==================== -->
+<section id="harmony">
+  <div class="sec-head"><span class="sec-num">05</span><h2>鸿蒙能力矩阵</h2><span class="note">回答"为什么必须是鸿蒙"</span></div>
+
+  <p>评审标准里"鸿蒙技术创新性"占创新性 50 分的一部分。下面这张表的作用是：<b>让每一个功能都能指到一个具体的鸿蒙能力，而不是"用鸿蒙写了个通用 App"。</b></p>
+
+  <table>
+    <tr>
+      <th style="width:118px">功能</th>
+      <th style="width:140px">鸿蒙能力</th>
+      <th style="width:190px">能力 / Kit</th>
+      <th>不用鸿蒙会怎样</th>
+    </tr>
+    <tr>
+      <td class="hi">投递快记</td>
+      <td>服务卡片（互动卡片）</td>
+      <td><code>FormKit</code><br>卡片内事件回调 + 数据实时刷新</td>
+      <td>必须打开 App 才能记录，录入路径从 1 次点击变成 4 次，记录行为会在第 3 天断裂。</td>
+    </tr>
+    <tr>
+      <td class="hi">作战地图卡片</td>
+      <td>互动卡片出框动效</td>
+      <td><code>FormKit</code> 卡片动效能力</td>
+      <td>只能是一块静态的信息展示砖，无法在桌面上表达"今天有 2 个节点临近"的紧迫感。</td>
+    </tr>
+    <tr>
+      <td class="hi">节奏哨兵</td>
+      <td>卡片常驻倒计时 + 本地通知</td>
+      <td><code>FormKit</code>（定时刷新）<br><code>NotificationKit</code>（锁屏 / 横幅）</td>
+      <td>倒计时锁在 App 里，用户必须主动打开才能看到——而"忘记看"恰恰是要解决的问题本身。</td>
+    </tr>
+    <tr>
+      <td class="hi">多端形态</td>
+      <td>一次开发多端部署</td>
+      <td>断点监听 + 栅格布局 + 自适应导航</td>
+      <td>手机平板各写一套，一个人 12 天不可能完成，只能做单端。</td>
+    </tr>
+    <tr>
+      <td class="hi">折叠屏悬停模式</td>
+      <td>折叠屏适配 / 悬停</td>
+      <td>半模态与折叠态监听</td>
+      <td>失去面试场景里最自然也最有记忆点的交互形态。</td>
+    </tr>
+    <tr>
+      <td class="hi">数据本地安全</td>
+      <td>端侧数据保护</td>
+      <td><code>ArkData</code> + 密钥库加密</td>
+      <td>简历与薪资信息上云，在隐私敏感的求职人群里直接劝退。</td>
+    </tr>
+    <tr>
+      <td class="hi">长列表性能</td>
+      <td>高性能渲染</td>
+      <td><code>LazyForEach</code> + 数据源分页</td>
+      <td>投递量上百条时列表卡顿，直接扣"用户体验"分。</td>
+    </tr>
+  </table>
+
+  <h3>已核实并排除：实况窗（Live View Kit）</h3>
+  <p>
+    实况窗（状态栏胶囊 + 锁屏卡片）本来是"节奏哨兵"最理想的落地形态，<b>但它不是技术问题，而是资质问题</b>。
+    按 HarmonyOS 官方文档（<code>Live View Kit 简介</code> / <code>开通实况窗服务权益</code>，2026-08 更新）逐项核对后确认：
+  </p>
+  <table>
+    <tr><th style="width:150px">官方限制</th><th>对本作品的影响</th></tr>
+    <tr>
+      <td class="hi">场景白名单</td>
+      <td>仅 16 类场景开放申请。面试倒计时唯一能挂靠的是「计时（TIMER）」，而该场景<b>仅限工具类应用申请</b>，官方明确列出不适用情形包含<b>事项待办、会议日程提醒、课程提醒</b>。</td>
+    </tr>
+    <tr>
+      <td class="hi">总时长 ≤ 8 小时</td>
+      <td>单实例生命周期最长 8 小时，且超过 2 小时未更新会隐藏胶囊、超过 4 小时未更新直接清除。<b>无法实现"提前 24 小时进入倒计时"的设想</b>。</td>
+    </tr>
+    <tr>
+      <td class="hi">需要资质审批</td>
+      <td>接入与调测前须在 AppGallery Connect 提交权益申请（含场景描述与设计规范归档），<b>5 个工作日出结果</b>；通过后还需重新生成 Profile 并重新打包。这在 12 天工期内不可控。</td>
+    </tr>
+    <tr>
+      <td class="hi">仅前台可创建</td>
+      <td>本地实况窗要求应用处于前台且已产生服务合约，无法由后台自行唤起。</td>
+    </tr>
+  </table>
+  <div class="callout warn">
+    <span class="ico">◈</span>
+    <div><b>处置：砍掉，不做降级保留。</b>把"节奏哨兵"的实现改为<b>卡片常驻倒计时 + 本地通知</b>——两者均无需任何资质审批，退回模拟器即可完整演示。
+    代价是失去状态栏胶囊的"长效常驻感"，但<b>锁屏可见性仍然保住</b>。省下的工时全部投入服务卡片与多端适配，因为砍掉实况窗之后，创新分的两根支柱就是它们。<br>
+    若后续有余力，可在 D9 顺手提交一次权益申请当作加分项，<b>但方案主体绝不依赖它</b>。</div>
+  </div>
+
+  <div class="callout">
+    <span class="ico">◈</span>
+    <div><b>API 名称已核实。</b>本节涉及的 <code>FormKit</code>、<code>NotificationKit</code>、<code>@kit.LiveViewKit</code> 均已对照华为官方文档确认存在与命名。
+    仍建议在动手前用官方文档复查各接口的<b>版本起始号</b>（部分卡片动效能力有版本门槛），<b>不要在 PPT 里写未验证的 API 名</b>——答辩时被技术专家追问会很难看。</div>
+  </div>
+</section>
+
+<!-- ==================== 06 交互创新 ==================== -->
+<section id="innovation">
+  <div class="sec-head"><span class="sec-num">06</span><h2>交互创新点</h2><span class="note">创新性 50 分的主战场</span></div>
+
+  <h3>创新点一：把系统桌面当成产品的首页</h3>
+  <p>
+    传统应用的信息架构是"打开 App → 找功能"。灯塔的第一个界面不是 App 首页，<b>而是手机主屏上的那张卡片</b>：
+    最上面是最近的三个节点倒计时，中间是本周投递数与回复率，右下角一个「＋」。
+  </p>
+  <p>
+    这个设计的价值不在于节省一次点击，而在于<b>把"求职进度"从一个需要被想起的东西，变成每次解锁都会撞见的东西</b>。
+    焦虑的反面不是放松，是确定性——用户每次看到卡片，都在确认"我掌握着局面"。
+  </p>
+
+  <h3>创新点二：让倒计时常驻在桌面，而不是关在应用里</h3>
+  <p>
+    求职者当天的状态是"不敢错过"，这个需求最合理的落点是把时间信息推到<b>不需要主动打开任何应用的地方</b>。
+    灯塔用两层承接：<b>桌面服务卡片常驻显示最近三个节点与实时倒计时</b>，节点临近时再由<b>本地通知</b>推到锁屏与横幅。
+  </p>
+  <p>
+    真正要下功夫的是<b>卡片的刷新策略</b>：倒计时靠定时轮询会耗电且不准，需要结合系统提供的卡片定时刷新能力做分钟级更新，
+    并在节点发生状态跃迁（例如"距截止不足 2 小时"）时主动触发刷新。
+    <b>这类工程细节是评委区分"真做过"与"套了个壳"的地方。</b>
+  </p>
+  <div class="callout">
+    <span class="ico">◈</span>
+    <div><b>关于实况窗的取舍（答辩大概率被问）：</b>实况窗本来是这件事最理想的形态，但官方场景白名单不接受"事项待办 / 会议日程提醒"类场景，
+    且需 5 个工作日资质审批，在 12 天工期内不可控。
+    <b>用卡片 + 通知拿到 80% 的效果，同时主动放弃一个更强但不合规的能力——这个判断过程本身就是工程成熟度</b>，答辩时讲出来远比藏着有说服力。</div>
+  </div>
+
+  <h3>创新点三：折叠屏悬停 = 面试作战台</h3>
+  <p>
+    线上面试时，手机通常是<b>立在桌上</b>的。折叠屏半折悬停恰好是这个物理姿态：
+  </p>
+  <ul>
+    <li><b>上半屏</b>：这家公司的 JD 关键词高亮 + 上次面试暴露的短板提醒（看着它回答问题）</li>
+    <li><b>下半屏</b>：剩余时间倒计时 + 结束后立刻可用的速记区</li>
+  </ul>
+  <p>面试结束不需要换设备、不需要切换状态，<b>倒计时停下的那一刻，复盘入口就在手指下面</b>。这把"面试"和"复盘"两个动作缝在了一起，也是雷达图能持续更新的原因。</p>
+
+  <h3>创新点四：一张会自己长大的雷达图</h3>
+  <p>
+    雷达图的六个维度不是预设的教科书目录，而是<b>从用户自己的面试记录里长出来的</b>——数据库设计、Java 并发、项目表达、
+    算法、计算机基础、沟通。哪一维被问得多、答得差，它就会自动收缩，并置顶到"该补清单"的第一位。
+  </p>
+  <p>这让产品的输出从"你要努力"变成"你下周先补 MySQL 的锁"——<b>可执行，是这一代求职工具最缺的东西。</b></p>
+</section>
+
+<!-- ==================== 07 多端设计 ==================== -->
+<section id="devices">
+  <div class="sec-head"><span class="sec-num">07</span><h2>信息架构与多端设计</h2></div>
+
+  <p>一套代码、同一份数据，在三种设备形态上呈现三种不同的价值侧重。这是"一次开发多端部署"最直观的证明。</p>
+
+  <div class="devices">
+    <div class="dev">
+      <div class="name">手机 · 随手记</div>
+      <div class="screen tall">
+        <div class="blk gold" style="height:34px">最近节点 · 倒计时</div>
+        <div class="blk">＋ 3 秒快记</div>
+        <div class="blk">投递列表（紧凑）</div>
+        <div class="blk">投递列表</div>
+        <div class="blk">投递列表</div>
+        <div class="blk cy" style="margin-top:auto">底部导航 Tabs</div>
+      </div>
+      <div class="desc"><b>导航：</b>底部 Tabs 四页<br><b>布局：</b>单栏，列表优先<br><b>主任务：</b>记录 &amp; 速览</div>
+    </div>
+    <div class="dev">
+      <div class="name">平板 · 看全局</div>
+      <div class="screen wide" style="min-height:260px">
+        <div class="blk cy" style="height:26px">顶部：漏斗总览（投递 42 / 回复 6 / 面 2）</div>
+        <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:6px;flex:1">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div class="blk" style="flex:1">侧边导航</div>
+            <div class="blk" style="flex:2">筛选</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div class="blk big" style="flex:2">作战地图 · 时间轴</div>
+            <div class="blk tall" style="flex:1">雷达图 + 短板清单</div>
+          </div>
+        </div>
+      </div>
+      <div class="desc"><b>导航：</b>左侧 SideBar 常驻<br><b>布局：</b>双栏主从（列表 + 详情）<br><b>主任务：</b>复盘 &amp; 决策</div>
+    </div>
+    <div class="dev">
+      <div class="name">折叠屏 · 作战</div>
+      <div class="screen tall" style="min-height:260px;border-radius:14px">
+        <div class="blk cy" style="flex:1">上半屏<br>JD 关键词 + 短板提醒</div>
+        <div style="height:10px;border-top:2px dashed var(--line2);position:relative">
+          <span style="position:absolute;right:2px;top:-9px;font-size:9px;color:var(--tx3)">⌄ 悬停</span>
+        </div>
+        <div style="flex:1.2;display:flex;flex-direction:column;gap:5px">
+          <div class="blk gold" style="height:30px">倒计时 02:47</div>
+          <div class="blk" style="flex:1">速记区（复盘入口）</div>
+        </div>
+      </div>
+      <div class="desc"><b>形态：</b>半折悬停，上下双区<br><b>主任务：</b>面试中的辅助 &amp; 面试后的即时复盘</div>
+    </div>
+  </div>
+
+  <h3>断点策略</h3>
+  <table>
+    <tr><th style="width:110px">断点</th><th style="width:130px">设备区间</th><th>布局策略</th></tr>
+    <tr><td class="hi">sm</td><td>手机竖屏 / 折叠屏折叠态</td><td>单栏 + 底部 Tabs，列表优先，卡片入口前置</td></tr>
+    <tr><td class="hi">md</td><td>手机横屏 / 折叠屏展开态</td><td>双栏（左列表右详情），导航转为侧边</td></tr>
+    <tr><td class="hi">lg</td><td>平板</td><td>三区（SideBar + 列表 + 详情看板），作战地图与雷达图并排</td></tr>
+  </table>
+
+  <h3>页面清单（共 7 页）</h3>
+  <ul>
+    <li><b>进度总览</b> —— 漏斗 + 最近节点 + 本回复率</li>
+    <li><b>投递列表</b> —— 可筛选、可排序、状态标签</li>
+    <li><b>投递详情</b> —— 时间线、跟进记录、相关简历版本</li>
+    <li><b>快记面板</b> —— 半模态弹窗，卡片可直达</li>
+    <li><b>面试复盘</b> —— 90 秒勾选式录入</li>
+    <li><b>能力雷达</b> —— 雷达图 + 短板 Top3 + 补强顺序</li>
+    <li><b>设置</b> —— 数据导出、外观、关于</li>
+  </ul>
+</section>
+
+<!-- ==================== 08 技术方案 ==================== -->
+<section id="tech">
+  <div class="sec-head"><span class="sec-num">08</span><h2>技术方案</h2></div>
+
+  <h3>技术栈</h3>
+  <table>
+    <tr><th style="width:130px">层次</th><th>选型</th><th>说明</th></tr>
+    <tr><td class="hi">语言 / UI</td><td>ArkTS + ArkUI 声明式</td><td>原生声明式开发，不套 WebView</td></tr>
+    <tr><td class="hi">数据持久化</td><td>ArkData 关系型数据库</td><td>投递、面试记录、知识点三张主表，支持复杂统计查询</td></tr>
+    <tr><td class="hi">轻量配置</td><td>Preferences</td><td>外观偏好、上次筛选条件等</td></tr>
+    <tr><td class="hi">卡片</td><td>FormKit</td><td>2×2 与 2×4 两种尺寸，支持卡内交互</td></tr>
+    <tr><td class="hi">倒计时常驻</td><td>FormKit 卡片定时刷新</td><td>卡片内分钟级倒计时，节点状态跃迁时主动刷新</td></tr>
+    <tr><td class="hi">通知</td><td>NotificationKit</td><td>节点到期提醒</td></tr>
+    <tr><td class="hi">安全</td><td>密钥库 / 本地加密</td><td>对简历文本与薪资字段做加密存储</td></tr>
+    <tr><td class="hi">并发</td><td>TaskPool / 异步任务</td><td>大批量统计与雷达图计算移出主线程</td></tr>
+  </table>
+
+  <h3>分层架构</h3>
+  <div class="card" style="font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:2.1;color:var(--tx2)">
+    <div style="color:var(--gold)">┌─ 表现层 (ArkUI)</div>
+    <div style="padding-left:22px">页面 × 7　·　自定义组件（雷达图 / 漏斗 / 倒计时卡）　·　多端断点适配</div>
+    <div style="color:var(--cyan)">├─ 卡片层 (FormKit)</div>
+    <div style="padding-left:22px">进度卡片　·　节点卡片　·　倒计时刷新调度　·　本地通知</div>
+    <div style="color:var(--blue)">├─ 领域层 (ViewModels)</div>
+    <div style="padding-left:22px">投递状态机　·　漏斗统计　·　雷达图算法　·　提醒调度</div>
+    <div style="color:var(--purple)">├─ 数据层 (Repository)</div>
+    <div style="padding-left:22px">DAO　·　本地加密　·　导出</div>
+    <div style="color:var(--tx3)">└─ 存储 (ArkData RDB + Preferences)</div>
+  </div>
+
+  <h3>核心数据模型</h3>
+  <table>
+    <tr><th style="width:150px">表</th><th style="width:220px">关键字段</th><th>说明</th></tr>
+    <tr>
+      <td class="hi">application</td>
+      <td>id, company, position, channel, resume_ver, status, applied_at, updated_at</td>
+      <td>一条投递即一条记录，status 驱动漏斗，resume_ver 用于 A/B 归因</td>
+    </tr>
+    <tr>
+      <td class="hi">interview</td>
+      <td>id, application_id, round, date, result, note</td>
+      <td>一场面试一条，与投递一对多</td>
+    </tr>
+    <tr>
+      <td class="hi">topic_review</td>
+      <td>id, interview_id, topic_id, asked_count, self_score</td>
+      <td>复盘勾选结果，雷达图的数据源</td>
+    </tr>
+    <tr>
+      <td class="hi">topic</td>
+      <td>id, name, category, weight</td>
+      <td>知识点字典，支持用户自定义新增</td>
+    </tr>
+  </table>
+
+  <h3>两个需要提前想清楚的技术点</h3>
+  <div class="card">
+    <h4 style="margin-top:0">① 卡片与 App 的数据一致性</h4>
+    <p style="margin-bottom:0">
+      卡片是独立进程运行的，和 App 不是同一份内存。写入流程必须约定清楚：<b>App 写库 → 主动通知卡片刷新 → 卡片重新读库</b>。
+      如果只在 App 侧更新而不推卡片，桌面会显示过期数据——这是同类作品最常见的翻车点，也是答辩时展示"技术深度"的好素材。
+    </p>
+  </div>
+  <div class="card">
+    <h4 style="margin-top:0">② 雷达图的归一化</h4>
+    <p style="margin-bottom:0">
+      "被问次数"和"自评分数"是两个量纲，直接相乘会失真。方案：<code>短板指数 = 提问频次归一值 × (1 − 自评归一值)</code>，
+      取指数最高的前三项作为"该补清单"。这个公式写在文档里，答辩时可以直接讲。
+    </p>
+  </div>
+</section>
+
+<!-- ==================== 09 排期 ==================== -->
+<section id="plan">
+  <div class="sec-head"><span class="sec-num">09</span><h2>12 天开发排期</h2><span class="note">2026-09-18 → 2026-09-29，09-30 留作提交缓冲</span></div>
+
+  <div class="gantt">
+    <div class="gantt-row head">
+      <div>阶段 \ 日期</div>
+      <div>18</div><div>19</div><div>20</div><div>21</div><div>22</div><div>23</div>
+      <div>24</div><div>25</div><div>26</div><div>27</div><div>28</div><div>29</div>
+    </div>
+    <div class="gantt-row">
+      <div class="label">环境与骨架</div>
+      <div class="gantt-bar g1" style="grid-column:2 / span 2">D1–D2</div>
+    </div>
+    <div class="gantt-row">
+      <div class="label">数据层 + 快记</div>
+      <div class="gantt-bar g2" style="grid-column:2 / span 3">D2–D4</div>
+    </div>
+    <div class="gantt-row">
+      <div class="label">作战地图</div>
+      <div class="gantt-bar g3" style="grid-column:4 / span 3">D4–D6</div>
+    </div>
+    <div class="gantt-row">
+      <div class="label">复盘 + 雷达图</div>
+      <div class="gantt-bar g4" style="grid-column:6 / span 3">D6–D8</div>
+    </div>
+    <div class="gantt-row">
+      <div class="label">服务卡片 + 通知</div>
+      <div class="gantt-bar g2" style="grid-column:8 / span 2">D8–D9</div>
+    </div>
+    <div class="gantt-row">
+      <div class="label">一多适配 + 打磨</div>
+      <div class="gantt-bar g3" style="grid-column:9 / span 2">D9–D10</div>
+    </div>
+    <div class="gantt-row">
+      <div class="label">全流程自测</div>
+      <div class="gantt-bar g1" style="grid-column:10 / span 2">D10–D11</div>
+    </div>
+    <div class="gantt-row">
+      <div class="label">录屏与剪辑</div>
+      <div class="gantt-bar g5" style="grid-column:11 / span 1">D11</div>
+    </div>
+    <div class="gantt-row">
+      <div class="label">PPT + 打包提交</div>
+      <div class="gantt-bar g4" style="grid-column:12 / span 1">D12</div>
+    </div>
+  </div>
+
+  <h3>每日任务拆解</h3>
+  <div class="tl">
+    <div class="tl-item"><div class="t">D1 · 09-18</div><div class="d">环境与工程骨架</div><div class="x">DevEco Studio 建工程、API 版本确认、路由骨架、主题与设计令牌、数据模型定稿。今天不做业务。</div></div>
+    <div class="tl-item"><div class="t">D2 · 09-19</div><div class="d">数据层打通</div><div class="x">RDB 建表、DAO 封装、种子数据（造 40 条真实感的投递记录，用于演示）。种子的真实感直接决定演示可信度。</div></div>
+    <div class="tl-item"><div class="t">D3–D4 · 09-20~21</div><div class="d">投递快记 + 列表</div><div class="x">半模态快记面板、状态标签、筛选排序。第 4 天做首次全流程自测。</div></div>
+    <div class="tl-item"><div class="t">D5–D6 · 09-22~23</div><div class="d">作战地图</div><div class="x">漏斗统计、时间轴渲染、转化率计算。这是全片视觉主力，值得多花半天打磨动效。</div></div>
+    <div class="tl-item"><div class="t">D7–D8 · 09-24~25</div><div class="d">复盘录入 + 雷达图</div><div class="x">90 秒勾选交互、短板指数算法、雷达图自绘组件。<b>产品灵魂，不能延期。</b></div></div>
+    <div class="tl-item"><div class="t">D9 · 09-26</div><div class="d">服务卡片 + 本地通知</div><div class="x">卡片两种尺寸、卡内交互、倒计时刷新策略、与 App 的数据同步、通知渠道与免打扰处理。<b>原计划的实况窗已按资质限制砍掉</b>（见第 05 节），省下的半天全部投给多端适配。</div></div>
+    <div class="tl-item"><div class="t">D10 · 09-27</div><div class="d">一多适配 + UI 打磨</div><div class="x">三端断点适配、空状态/异常态、加载动效、深色模式。用户体验 10 分在这一天挣。</div></div>
+    <div class="tl-item"><div class="t">D11 · 09-28</div><div class="d">全流程自测 + 录屏剪辑</div><div class="x">上午清 bug 与边界情况，下午录屏、剪辑、配旁白。</div></div>
+    <div class="tl-item"><div class="t">D12 · 09-29</div><div class="d">PPT + 打包 + 提交</div><div class="x">PPT 撰写、hap 导出验证、zip 打包、规范命名、发送提交邮箱。<b>不要留到 09-30 当天。</b></div></div>
+  </div>
+
+  <div class="callout warn">
+    <span class="ico">◈</span>
+    <div><b>如果进度落后，按这个顺序砍：</b>JD 匹配度 → 简历 A/B 对比 → 折叠屏悬停 → <b>平板适配</b>。<br>
+    但有两个东西绝对不能砍：<b>服务卡片</b>（这是"鸿蒙原生"的证据）和<b>能力雷达图</b>（这是"创新性"的证据）。砍掉任何一个，作品就退化成普通 todo 应用。</div>
+  </div>
+</section>
+
+<!-- ==================== 10 演示视频 ==================== -->
+<section id="video">
+  <div class="sec-head"><span class="sec-num">10</span><h2>演示视频脚本</h2><span class="note">建议 2 分 30 秒</span></div>
+
+  <div class="callout">
+    <span class="ico">◈</span>
+    <div><b>评委会用这个视频决定要不要让你进复赛。</b>前 20 秒必须让人明白"这是什么、解决什么、为什么牛"，不要用任何时间做背景铺垫。</div>
+  </div>
+
+  <div class="card" style="padding:6px 24px">
+    <div class="shot">
+      <div class="time">0:00–0:18</div>
+      <div class="body">
+        <h4>开场：把痛点拍成一个画面</h4>
+        <p>黑白画面：深夜，一屏 Excel 表格，红笔圈出的"无回复"标记，手机弹出"您的简历已收到"的自动回复通知。</p>
+        <div class="vo">秋招进行到一半，最折磨人的不是没有 offer，是你不知道自己卡在哪一环。</div>
+      </div>
+    </div>
+    <div class="shot">
+      <div class="time">0:18–0:35</div>
+      <div class="body">
+        <h4>亮出作品：一屏三形态</h4>
+        <p>画面转亮。手机桌面上一张卡片直接出现在主屏，平板和折叠屏同步闪现三种形态。</p>
+        <div class="vo">灯塔，把秋招从一次海投，变成一场可度量的实验。</div>
+      </div>
+    </div>
+    <div class="shot">
+      <div class="time">0:35–1:05</div>
+      <div class="body">
+        <h4>功能一：桌面卡片 + 3 秒快记</h4>
+        <p>实测镜头：从锁屏解锁 → 点击卡片「＋」→ 录入一家公司 → 卡片上的数字实时跳动更新。<b>全程计时器叠加在画面上。</b></p>
+        <div class="vo">不用打开应用，不用找菜单。投完一家，录一条，三秒。桌面上的数字会立刻告诉你：这周你投了几家，回复率是多少。</div>
+      </div>
+    </div>
+    <div class="shot">
+      <div class="time">1:05–1:35</div>
+      <div class="body">
+        <h4>功能二：作战地图（平板形态）</h4>
+        <p>镜头切到平板。漏斗从"投递 42"逐层收窄到"Offer 1"，其中"笔试→面试"环节标红。<b>点击红点，直接跳到那一批投递的简历版本。</b></p>
+        <div class="vo">四十多次投递，第一次看清楚自己到底漏在哪一层。这里收紧，就是改简历的方向。</div>
+      </div>
+    </div>
+    <div class="shot">
+      <div class="time">1:35–2:05</div>
+      <div class="body">
+        <h4>功能三：复盘 → 能力雷达（核心）</h4>
+        <p>勾选 5 个被问到的知识点 → 雷达图当场变形收缩 → 右侧"该补清单"自动重排，第一项浮出："MySQL 锁与并发"。</p>
+        <div class="vo">面试产生的信息，是这段时间最贵的资产。以前它 24 小时内就蒸发，现在它变成了一张能照着补的清单。</div>
+      </div>
+    </div>
+    <div class="shot">
+      <div class="time">2:05–2:25</div>
+      <div class="body">
+        <h4>功能四：倒计时常驻桌面 + 锁屏通知</h4>
+        <p>镜头一：桌面卡片上的倒计时数字逐分钟跳动。镜头二：节点临近，锁屏上弹出一条通知。镜头三：折叠屏展开悬停，上半屏 JD 关键词、下半屏倒计时与速记。</p>
+        <div class="vo">笔试和面试，不敢错过，也不该靠记得。它就在那里。</div>
+      </div>
+    </div>
+    <div class="shot">
+      <div class="time">2:25–2:30</div>
+      <div class="body">
+        <h4>收尾</h4>
+        <p>黑底白字打出作品名与 slogan，右下角标注技术底座。</p>
+        <div class="vo">灯塔 · 在光谷，为每一个追光的毕业生点亮一盏灯。</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>录制要点（只有模拟器，必须靠后期补）</h3>
+  <ul>
+    <li><b>裁掉模拟器外框</b>：录屏后只在画布中保留手机屏幕区域，否则"这是模拟器"会削弱可信度。</li>
+    <li><b>加速与卡点</b>：真实操作速度偏慢，用 1.5–2 倍速 + 关键停顿制造节奏感。</li>
+    <li><b>真人不出镜，但真人手要出镜</b>：演示"3 秒快记"时如果有真机配合会更好；没有真机就把计时器做显眼。</li>
+    <li><b>数据要真</b>：种子数据用真实感的公司名与岗位名（可用你能想到的行业真实企业类型），不要出现"测试1、测试2"。</li>
+    <li><b>旁白用男声/女声实读，不要用机器音</b>：情感类作品最怕机械音。</li>
+  </ul>
+</section>
+
+<!-- ==================== 11 提交清单 ==================== -->
+<section id="submit">
+  <div class="sec-head"><span class="sec-num">11</span><h2>提交材料对照清单</h2></div>
+  <table>
+    <tr><th style="width:132px">官方要求</th><th>本作品对应产出</th><th style="width:82px">状态</th></tr>
+    <tr><td class="hi">① 创意描述（一句话）</td><td>见文档第 00 节，可直接复制使用</td><td>✅ 已有</td></tr>
+    <tr><td class="hi">② 作品介绍 PPT</td><td>创意背景 / 核心功能 / 技术实现 / 市场前景，可从本文档逐节转写</td><td>◻ 待做</td></tr>
+    <tr><td class="hi">③ 演示 Demo（hap）</td><td>DevEco Studio 导出签名 hap，模拟器验证可安装可运行</td><td>◻ 待做</td></tr>
+    <tr><td class="hi">④ 演示视频</td><td>按第 10 节分镜录制，约 2 分 30 秒</td><td>◻ 待做</td></tr>
+    <tr><td class="hi">⑤ 打包命名</td><td><code>高校名称-团队名称-队长姓名-队长手机号.zip</code></td><td>◻ 待做</td></tr>
+    <tr><td class="hi">提交邮箱</td><td><code>hmwhcxzx@harmonytsc.com</code></td><td>◻ 待发</td></tr>
+  </table>
+  <div class="callout warn">
+    <span class="ico">◈</span>
+    <div>比赛期间每队有 <b>5 次提交机会</b>，组委会取最后一次提交的作品评审 —— 所以进度做到 60% 就可以先交一版占位，最后再交完整版。但务必<b>不要交一版比之前更差的</b>。</div>
+  </div>
+</section>
+
+<!-- ==================== 12 前景评估 ==================== -->
+<section id="market">
+  <div class="sec-head"><span class="sec-num">12</span><h2>前景评估</h2><span class="note">对应评分项「需求真实性 / 社会价值 / 可落地商业价值」</span></div>
+
+  <h3>需求真实性</h3>
+  <ul>
+    <li><b>用户基数确定且在峰值</b>：2027 届毕业生规模预计突破 1300 万，未来十年毕业生规模预计持续处于千万级高位。</li>
+    <li><b>痛点已被权威机构确认</b>：就业指导报告明确指出学生需"建立投递进度表""把海投变成小实验""简历诊断应成为标配训练项"——现有工具链是空白。</li>
+    <li><b>付费意愿存在</b>：求职季是学生一年中工具付费意愿最强的窗口，且求职培训/陪跑服务已形成成熟付费市场。</li>
+  </ul>
+
+  <h3>社会价值</h3>
+  <ul>
+    <li>直接服务于"高质量充分就业"——"十五五"规划首次将其纳入地方绩效考核，政策抓手明确。</li>
+    <li>降低求职过程中的信息不对称，缓解青年群体就业焦虑（16–24 岁失业率 17.9%）。</li>
+    <li>数据本地化设计，避免求职者隐私（简历、薪资、公司名）泄露，符合数据安全合规方向。</li>
+  </ul>
+
+  <h3>可落地路径</h3>
+  <table>
+    <tr><th style="width:110px">路径</th><th>说明</th><th style="width:96px">优先级</th></tr>
+    <tr>
+      <td class="hi">To C · 免费 + 内购</td>
+      <td>基础功能免费，简历版本对比、深度报告等进阶能力内购。学生市场价格敏感，需极低定价或按季订阅。</td>
+      <td>主路径</td>
+    </tr>
+    <tr>
+      <td class="hi">To B · 高校就业中心</td>
+      <td>面向高校就业指导部门提供班级/学院求职态势看板，是就业指导工作的量化抓手。可复制到光谷及武汉都市圈高校。</td>
+      <td>高价值</td>
+    </tr>
+    <tr>
+      <td class="hi">To B · 招聘平台合作</td>
+      <td>投递数据可反向成为企业招聘渠道效果的度量工具。存在合规边界，需谨慎设计。</td>
+      <td>远期</td>
+    </tr>
+  </table>
+
+  <h3>与光谷的关系</h3>
+  <p>
+    光谷聚集了 16.9 万家市场主体、超 1.6 万家光电子信息相关企业、196 家国家级"小巨人"，同时也是武汉高校最密集的区域。
+    <b>"大量企业要招人"与"大量学生要找活"在同一片区域内同时发生，但双方的信息匹配是低效的</b>——
+    这是灯塔这类"求职侧数据基础设施"最理想的试验场。作品如果能在光谷的高校里跑出第一批数据，就具备了向武汉都市圈 8 城复制的样本价值。
+  </p>
+  <div class="callout ok">
+    <span class="ico">◈</span>
+    <div>这段话建议原封不动放进 PPT 的"市场前景"页——它把作品、光谷产业、国家政策三件事拴在了一起。</div>
+  </div>
+</section>
+
+<!-- ==================== 13 风险 ==================== -->
+<section id="risk">
+  <div class="sec-head"><span class="sec-num">13</span><h2>风险与预案</h2></div>
+  <table>
+    <tr><th style="width:150px">风险</th><th style="width:74px">等级</th><th>预案</th></tr>
+    <tr>
+      <td class="hi">实况窗资质门槛</td>
+      <td style="color:var(--green)">已处置</td>
+      <td>经官方文档核实：场景白名单不含"事项待办 / 会议日程提醒"，且需 5 个工作日 AGC 权益审批。<b>已于设计阶段砍掉，不留降级分支</b>，改用卡片常驻倒计时 + 本地通知，两者均无需审批。详细依据见第 05 节。</td>
+    </tr>
+    <tr>
+      <td class="hi">模拟器能力边界</td>
+      <td style="color:var(--gold)">中</td>
+      <td>服务卡片已在模拟器验证可用。剩余需验证项：卡内交互事件回调、卡片定时刷新的最小间隔、通知在锁屏的呈现效果。<b>若卡片定时刷新间隔不满足分钟级倒计时</b>，退化为"进入 App 时校准 + 通知负责提醒"。</td>
+    </tr>
+    <tr>
+      <td class="hi">12 天工期</td>
+      <td style="color:var(--red)">高</td>
+      <td>砍功能顺序已在第 09 节明确。原则：<b>宁可四个功能都完整，不要六个功能都是半成品</b>（完备度占 20 分）。</td>
+    </tr>
+    <tr>
+      <td class="hi">作品同质化</td>
+      <td style="color:var(--gold)">中</td>
+      <td>求职类工具容易被认为"不新鲜"。差异化靠三处死守：卡片作为主入口、雷达图的量化归因、"把海投变成实验"的定位表述。<b>PPT 第一页就要把这个定位打出来。</b></td>
+    </tr>
+    <tr>
+      <td class="hi">数据真实性被质疑</td>
+      <td style="color:var(--gold)">中</td>
+      <td>演示数据必须是<b>你自己真实的投递情况</b>（脱敏后）。被问"这些数据哪来的"时，回答"这是我秋招的真实记录"，这句话的分量远超任何虚构 demo。</td>
+    </tr>
+    <tr>
+      <td class="hi">API 版本不支持</td>
+      <td style="color:var(--blue)">低</td>
+      <td><code>FormKit</code> / <code>NotificationKit</code> 已对照官方文档确认存在；<code>@kit.LiveViewKit</code> 亦确认存在但不予采用。剩余动作：在 DevEco 中确认工程所选 API 版本下卡片定时刷新能力的可用性。</td>
+    </tr>
+    <tr>
+      <td class="hi">参赛资格</td>
+      <td style="color:var(--blue)">低</td>
+      <td>大赛主要面向武汉高校在读者，同时"鼓励武汉市范围内所有高等学校在读学生踊跃参赛"。<b>建议今天就向主办方确认武昌工学院的参赛资格与报名状态。</b></td>
+    </tr>
+  </table>
+</section>
+
+<!-- ==================== 14 答辩 ==================== -->
+<section id="qa">
+  <div class="sec-head"><span class="sec-num">14</span><h2>答辩预演</h2><span class="note">复赛形式：线下路演 + 答辩</span></div>
+
+  <div class="qa">
+    <div class="q"><span>Q1</span>市面上已经有牛客、BOSS、应届生求职网，你凭什么做这个？</div>
+    <div class="a">
+      那些产品做的是"把岗位推给用户"，解决的是<b>信息获取</b>；灯塔做的是"把投递结果还给用户"，解决的是<b>反馈缺失</b>。
+      这是两个完全不同的环节——你可以在所有平台上投递，但没有任何一个平台会告诉你：你这一版简历的回复率是多少、你最该补的能力是哪一项。
+      灯塔不抢流量入口，它是求职过程的数据层。
+    </div>
+  </div>
+
+  <div class="qa">
+    <div class="q"><span>Q2</span>为什么非要用鸿蒙？做成小程序不是一样？</div>
+    <div class="a">
+      不一样，而且差别正好在产品最核心的地方。<b>求职是一场"不敢错过"的等待</b>，它的信息必须出现在用户不需要主动想到的地方。
+      小程序做不到两件事：一是把进度和倒计时钉在手机桌面（<b>服务卡片作为主入口，而不是应用图标</b>），
+      二是让同一份数据在手机、平板、折叠屏上呈现三种不同的工作姿态（<b>一次开发多端部署</b>）。
+      这两个能力决定了产品的根本形态——是"一个需要被打开的工具"，还是"一个一直在你身边的助手"。灯塔必须是后者。
+      <br><br>
+      另外坦白一句：我们原本还想用<b>实况窗</b>把倒计时放进状态栏，但它的场景白名单不接受"事项待办 / 会议日程提醒"，
+      且需 5 个工作日资质审批，所以主动砍掉了。我们不是"没想到更好的方案"，而是<b>核实过、判断过之后选择了合规的那条路</b>。
+    </div>
+  </div>
+
+  <div class="qa">
+    <div class="q"><span>Q3</span>雷达图的算法依据是什么？会不会很主观？</div>
+    <div class="a">
+      它由两部分构成：客观部分是<b>提问频次</b>（一场面试里这个知识点被问了几次），这是事实数据；
+      主观部分是<b>自评掌握度</b>，这是用户对自己的判断。短板指数 = 频次归一值 ×（1 − 自评归一值）。
+      产品的目的不是给出一个"客观的能力评分"，而是把用户的<b>注意力排序</b>——先补被问最多、又答得最差的那些。这个排序比绝对分数更有用，也更诚实。
+    </div>
+  </div>
+
+  <div class="qa">
+    <div class="q"><span>Q4</span>你一个人 12 天，凭什么能做完？</div>
+    <div class="a">
+      因为我把范围砍得很狠。整个作品<b>没有后端、没有账号、没有网络请求、不接大模型</b>，是一个纯本地应用——
+      数据存在设备里既是隐私设计，也是工期设计。四个核心功能全部围绕一条主数据流展开，共用同一套数据层。
+      另外我有 HarmonyOS 应用开发者基础与高级认证的技术储备，ArkTS 和 ArkUI 不是从零开始。
+    </div>
+  </div>
+
+  <div class="qa">
+    <div class="q"><span>Q5</span>这个项目接下来准备怎么做下去？</div>
+    <div class="a">
+      三条线。第一，<b>真机 + 上架</b>：补齐服务卡片动效与倒计时刷新策略的真机验证，冲击应用市场，先在自己的学校跑起来。
+      实况窗在取得服务权益资质后作为下一版能力接入（它是这件产品最理想的形态，只是当下批不下来）。
+      第二，<b>数据积累</b>：真实投递数据积累一季后，可以做"什么样的简历版本回复率更高"的群体洞察，这是这个产品真正的护城河。
+      第三，<b>转向高校就业中心</b>：把个人工具升级为学院级的求职态势看板，直接服务"高质量充分就业"的考核需求。
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 15 下一步 ==================== -->
+<section id="next">
+  <div class="sec-head"><span class="sec-num">15</span><h2>下一步行动</h2><span class="note">按顺序执行，第 1 项今天必须完成</span></div>
+  <ul class="check">
+    <li><b>今天（最高优先）：</b>向主办方或学校确认参赛资格与报名状态（武昌工学院是否在参赛高校范围内），确认 09-30 截止日期无误</li>
+    <li><b>已完成：</b>服务卡片在 DevEco 模拟器上验证可用</li>
+    <li><b>已完成：</b>实况窗经官方文档核实——场景白名单与 5 个工作日资质审批构成硬门槛，<b>已从方案中砍掉</b>，改用卡片 + 通知</li>
+    <li><b>今天：</b>在已建好的工程里补一次验证：卡片<b>定时刷新</b>的最小间隔能否支撑分钟级倒计时、卡内交互回调、本地通知在锁屏的呈现</li>
+    <li><b>明天前：</b>整理你自己真实的秋招数据（投了多少家、回复几家、面了几场、被问过什么），作为种子数据与演示素材</li>
+    <li><b>D1–D2：</b>工程骨架 + 数据模型定稿</li>
+    <li><b>D3 起：</b>进入正式开发，按第 09 节排期执行</li>
+    <li><b>中途：</b>如果卡片定时刷新被卡住超过半天，立刻退化为"进 App 校准 + 通知提醒"，并在 PPT 中调整表述，不要死磕</li>
+  </ul>
+
+  <div class="callout ok">
+    <span class="ico">◈</span>
+    <div><b>顺带说一句：</b>这个作品和你正在准备的秋招是同一件事。做完它，你不仅有了一次竞赛经历，
+    还多了一段可以在面试里讲的完整项目故事——"我为了自己的秋招做了一个鸿蒙应用，这是我的真实投递数据"。
+    这句话在面试里的杀伤力，比任何包装过的项目都大。</div>
+  </div>
+</section>
+
+<!-- ==================== 来源 ==================== -->
+<section id="refs">
+  <div class="sec-head"><span class="sec-num">16</span><h2>数据来源</h2></div>
+  <ol class="srcs">
+    <li>2026 第二届「光谷杯」鸿蒙生态创新大赛官方发布（赛程、赛道、提交要求、评分标准）—— 主办：鸿蒙生态（武汉）创新中心</li>
+    <li>「光谷杯」鸿蒙生态创新大赛 2025 颁奖典礼报道，湖北日报 —— 赛道设置与获奖情况</li>
+    <li>2027 届毕业生破 1300 万，国央企秋招预计释放超 30 万岗位，人民政协网，2026-08-13</li>
+    <li>国家统计局 2026-08-17 发布：2026 年 7 月全国城镇调查失业率数据</li>
+    <li>《2026 年秋季校园招聘趋势分析报告》，慧生涯·生涯研究与咨询团队，2026 年 9 月（引述前程无忧、猎聘、脉脉高聘等平台数据）</li>
+    <li>2027 届秋招相关报道，中国经济新闻网，2026 年 9 月</li>
+    <li>光谷产业数据：武汉市人民政府门户网站、武汉市自然资源和城乡建设局公开报道（2026）</li>
+    <li>《一张单词卡片，如何在鸿蒙生态里"生根发芽"？》中国青年网，2025-12-23 —— 服务卡片类校园作品获奖案例</li>
+    <li>HarmonyOS 6.0/6.1 新能力一览，华为开发者联盟官网 —— 互动卡片、实况窗、一次开发多端部署等能力</li>
+    <li>《Live View Kit 简介》《开通实况窗服务权益》《构建本地实况窗》，华为开发者联盟官方文档（文档版本 V240，2026-08 更新）—— 实况窗场景白名单、8 小时生命周期上限、AGC 权益审批流程、模拟器支持差异</li>
+    <li>鸿蒙校园创新作品案例报道（腾讯网、大河财立方等，2025–2026）—— 无障碍与校园类作品方向参考</li>
+  </ol>
+  <div class="callout warn" style="margin-top:22px">
+    <span class="ico">◈</span>
+    <div>上述数据用于参赛文档时，<b>请保留来源标注</b>。评委席上有政府领导与投资机构，来源可核查是基本要求；引用错误的数据比不引用更扣分。</div>
+  </div>
+</section>
+
+<div class="footer">
+  灯塔 Lighthouse · 秋招数据作战台<br>
+  作品设计文档 v1.1 &nbsp;|&nbsp; 2026-09-18 &nbsp;|&nbsp; 2026 第二届「光谷杯」鸿蒙生态创新大赛 · 赛道一<br>
+  <span style="color:#4a5c78">本方案按 1 人 × 12 天 × 6h 设计，范围已做工程化裁剪；v1.1 依据官方文档移除实况窗能力</span>
+</div>
+
+</div>
+</body>
+</html>
