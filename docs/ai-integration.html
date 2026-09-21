@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>灯塔 Lighthouse · AI 接入方案 | 2026 光谷杯鸿蒙生态创新大赛</title>
+<style>
+  :root{
+    --bg:#080c16; --bg2:#0c1220;
+    --panel:#101827; --panel2:#141d2f;
+    --line:#1d2a42; --line2:#28374f;
+    --tx:#e8eef8; --tx2:#9db0cc; --tx3:#6b7f9e;
+    --gold:#ffb454; --cyan:#4fd1c5; --blue:#5b9dff;
+    --red:#ff6b6b; --green:#5ddc7f; --purple:#b18cff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--tx);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.75; font-size:15px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px 120px}
+  .hero{position:relative;padding:76px 0 48px;overflow:hidden}
+  .hero::before{
+    content:"";position:absolute;top:-280px;left:50%;transform:translateX(-50%);
+    width:760px;height:760px;border-radius:50%;
+    background:radial-gradient(circle,rgba(79,209,197,.14) 0%,rgba(91,157,255,.06) 42%,transparent 68%);
+    pointer-events:none;
+  }
+  .hero-inner{position:relative;z-index:1}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:9px;font-size:12.5px;letter-spacing:.14em;
+    color:var(--cyan);border:1px solid rgba(79,209,197,.32);background:rgba(79,209,197,.07);
+    padding:6px 14px;border-radius:100px;margin-bottom:24px;
+  }
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+  h1{
+    font-size:clamp(34px,5.6vw,52px);line-height:1.12;letter-spacing:-.02em;font-weight:800;
+    background:linear-gradient(96deg,#fff 0%,#a8f0e6 40%,#7fc4ff 80%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:14px;
+    display:inline-block;
+  }
+  .sub{font-size:18px;color:var(--tx2);margin-bottom:30px}
+  .slogan{border-left:3px solid var(--cyan);padding:13px 0 13px 19px;margin-bottom:32px;
+    font-size:17px;color:#a8f0e6;font-weight:600;line-height:1.7}
+  .slogan small{display:block;color:var(--tx3);font-size:13.5px;font-weight:400;margin-top:7px}
+
+  section{margin-top:68px;scroll-margin-top:28px}
+  .sec-head{display:flex;align-items:baseline;gap:15px;margin-bottom:26px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .sec-num{font-size:13px;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums;letter-spacing:.06em;padding-top:3px}
+  .sec-head h2{font-size:25px;font-weight:700;letter-spacing:-.01em}
+  .sec-head .note{margin-left:auto;font-size:12.5px;color:var(--tx3);white-space:nowrap}
+
+  h3{font-size:17px;font-weight:650;margin:30px 0 12px;color:#fff;display:flex;align-items:center;gap:9px}
+  h3::before{content:"";width:3px;height:15px;border-radius:2px;background:var(--cyan);flex:none}
+  h4{font-size:14.5px;font-weight:650;margin:19px 0 8px;color:var(--gold)}
+  p{color:var(--tx2);margin-bottom:12px}
+  p strong,li strong{color:var(--tx);font-weight:650}
+  ul,ol{color:var(--tx2);padding-left:22px;margin-bottom:13px}
+  li{margin-bottom:6px}
+  code{background:rgba(91,157,255,.11);color:#9fc7ff;padding:2px 7px;border-radius:5px;font-size:13px;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  pre{background:#0a0f1c;border:1px solid var(--line);border-radius:11px;padding:15px 17px;overflow-x:auto;margin:14px 0}
+  pre code{background:none;color:#b9d4f0;padding:0;font-size:12.5px;line-height:1.65}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:20px 22px;margin:16px 0}
+  .card.tint{background:linear-gradient(160deg,rgba(79,209,197,.06),rgba(91,157,255,.035));border-color:var(--line2)}
+  .card.alert{border-color:rgba(255,107,107,.32);background:rgba(255,107,107,.055)}
+  .card.good{border-color:rgba(93,220,127,.28);background:rgba(93,220,127,.045)}
+  .card h4{margin-top:0}
+
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13.5px}
+  th{text-align:left;padding:10px 12px;background:var(--panel2);color:var(--tx2);font-weight:600;
+    font-size:12.5px;letter-spacing:.03em;border-bottom:1px solid var(--line2)}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);color:var(--tx2);vertical-align:top}
+  tr:hover td{background:rgba(91,157,255,.03)}
+  td.hi{color:var(--tx);font-weight:600}
+  .ok{color:var(--green);font-weight:600}
+  .no{color:var(--red);font-weight:600}
+  .mid{color:var(--gold);font-weight:600}
+
+  /* 三层架构图 */
+  .layers{display:grid;gap:11px;margin:20px 0}
+  .layer{border:1px solid var(--line2);border-radius:12px;padding:16px 19px;position:relative;
+    display:grid;grid-template-columns:96px 1fr;gap:17px;align-items:start;background:var(--panel)}
+  .layer .tag{font-size:11.5px;font-weight:700;letter-spacing:.08em;padding:5px 0;text-align:center;border-radius:6px}
+  .layer.l1{border-color:rgba(93,220,127,.34);background:linear-gradient(120deg,rgba(93,220,127,.055),transparent 62%)}
+  .layer.l1 .tag{background:rgba(93,220,127,.14);color:var(--green)}
+  .layer.l2{border-color:rgba(79,209,197,.34);background:linear-gradient(120deg,rgba(79,209,197,.055),transparent 62%)}
+  .layer.l2 .tag{background:rgba(79,209,197,.14);color:var(--cyan)}
+  .layer.l3{border-color:rgba(255,180,84,.34);background:linear-gradient(120deg,rgba(255,180,84,.055),transparent 62%)}
+  .layer.l3 .tag{background:rgba(255,180,84,.14);color:var(--gold)}
+  .layer .body b{color:#fff;display:block;margin-bottom:5px;font-size:14.5px}
+  .layer .body span{color:var(--tx2);font-size:13px;display:block}
+
+  .filelist{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;color:var(--tx2);line-height:2}
+  .filelist .d{color:var(--tx3)}
+  .filelist .new{color:var(--green)}
+
+  footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--line);color:var(--tx3);font-size:12.5px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <div class="hero-inner">
+      <div class="eyebrow"><span class="dot"></span>AI 接入方案 v1.0 · 2026-09-18</div>
+      <h1>灯塔 · AI 该怎么接</h1>
+      <div class="sub">端云双模：能离线的一律端侧，只有非结构化的人类语言才上云</div>
+      <div class="slogan">
+        「不是手机上有 AI，而是 AI 决定了这台手机在没网的时候还能不能干活。」
+        <small>这份文档回答三件事：DeepSeek 能不能接、接在哪一层、怎么接才不会被评委当成套壳</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">01</div>
+      <h2>先回答：DeepSeek 能不能接</h2>
+      <div class="note">已实测</div>
+    </div>
+
+    <p><strong>能。而且我刚在这台机器上实测过。</strong>直接 POST <code>api.deepseek.com/chat/completions</code>，无密钥时返回 <code>401 Authentication Fails (governor)</code>，耗时 0.67 秒 —— 说明网络路径通畅，只差一个 key 的事。</p>
+
+    <p>但有三件事必须先改口径，否则会踩坑：</p>
+
+    <div class="card alert">
+      <h4>⚠ 坑一：模型名已经变了，网上教程基本全是错的</h4>
+      <p style="margin-bottom:0">旧的 <code>deepseek-chat</code> 和 <code>deepseek-reasoner</code> 两个别名已于 <strong>2026 年 7 月 24 日退役</strong>，继续调用会直接请求失败。现在必须用 <code>deepseek-flash</code>。另有一个更隐蔽的：中间名 <code>deepseek-v4-flash</code> 虽然仍可调用，但背后的模型已下线，请求会被静默路由到 V4.1-Flash —— 能跑，但你不知道自己在跑什么。</p>
+    </div>
+
+    <div class="card">
+      <h4>坑二：要联网，所以演示有断网风险</h4>
+      <p style="margin-bottom:0">这是双刃剑。接上云端能力产品更强，但演示现场如果网络抖动，功能就哑了。缓解办法不是「祈祷网络好」，是架构上做降级（见第 03 节）。</p>
+    </div>
+
+    <div class="card">
+      <h4>坑三：密钥不能硬编码</h4>
+      <p style="margin-bottom:0">hap 包内的 abc 字节码可被逆向，明文写在代码里的 key 一定会泄露。如果你用的是自己的主账号，被盗刷是真金白银的损失。处理办法见第 06 节。</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">02</div>
+      <h2>核心判断：不要让 DeepSeek 当主角</h2>
+      <div class="note">这条比技术选型更重要</div>
+    </div>
+
+    <p>你问「加上 AI 竞争力会不会很大」。我的判断是：<strong>方向对，但如果只是「接了个大模型」，反而是负分。</strong>纯接 API 有三个死法：</p>
+
+    <ul>
+      <li><strong>断网即死</strong> —— 评委问一句「没网能用吗」，答不上来就完了。</li>
+      <li><strong>被当成套壳</strong> —— 「你不就是调了个 DeepSeek 吗，创新点在哪？」这是最可能的追问。</li>
+      <li><strong>没有壁垒</strong> —— 任何一个参赛队今天下午都能做出同样的东西。</li>
+    </ul>
+
+    <p>真正的差异化不在云端，在<strong>端侧</strong>。我把鸿蒙能用的 AI 能力逐个核实了一遍：</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:180px">能力</th><th style="width:190px">Kit</th><th style="width:130px">模拟器</th><th>审批门槛</th><th style="width:88px">结论</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="hi">语音听写（离线模型）</td>
+          <td><code>Core Speech Kit</code></td>
+          <td class="ok">✅ 6.0.0 起支持</td>
+          <td class="ok">无需审批</td>
+          <td class="ok">用</td>
+        </tr>
+        <tr>
+          <td class="hi">自然语言理解（分词/实体）</td>
+          <td><code>Natural Language Kit</code></td>
+          <td class="no">❌ 不支持</td>
+          <td class="ok">无需审批</td>
+          <td class="no">弃</td>
+        </tr>
+        <tr>
+          <td class="hi">文本识别 OCR</td>
+          <td><code>Core Vision Kit</code></td>
+          <td class="no">❌ 不支持</td>
+          <td class="ok">无需审批</td>
+          <td class="no">弃</td>
+        </tr>
+        <tr>
+          <td class="hi">意图框架</td>
+          <td><code>Intents Kit</code></td>
+          <td class="mid">受限</td>
+          <td class="no">需 AGC 审批 + 上架</td>
+          <td class="no">弃</td>
+        </tr>
+        <tr>
+          <td class="hi">实况窗</td>
+          <td><code>Live View Kit</code></td>
+          <td class="mid">受限</td>
+          <td class="no">5 工作日审批</td>
+          <td class="no">已砍</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="card good">
+      <h4>这张表里唯一亮着的绿灯，价值比云端高</h4>
+      <p style="margin-bottom:0"><strong>语音听写是唯一能在模拟器上跑通的鸿蒙端侧 AI 能力，而它跑的是离线模型 —— 不需要网络、不需要额度、数据不出设备。</strong>这正好戳中我们方案的核心场景：挤地铁去面试的应届生、车间里信号只有一格的技术员。演示视频里「对着手机说一句『今天投了字节跳动的 Java 后端』，一秒变成一条结构化记录」，这个镜头的说服力，远超让评委看一个聊天框。</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">03</div>
+      <h2>端云双模架构</h2>
+      <div class="note">AI 放在哪一层，决定它值不值钱</div>
+    </div>
+
+    <div class="layers">
+      <div class="layer l1">
+        <div class="tag">L1 · 端侧</div>
+        <div class="body">
+          <b>永远可用 · 零成本 · 零审批 · 数据不出设备</b>
+          <span>① 语音速记：Core Speech Kit 离线听写，「说一句记一条」</span>
+          <span>② 本地解析引擎：正则 + 词典，从口语里抽出公司 / 岗位 / 地点 / 日期</span>
+          <span>③ 全部统计计算：漏斗、时间轴、雷达图渲染、已有分数展示</span>
+        </div>
+      </div>
+      <div class="layer l2">
+        <div class="tag">L2 · 云侧</div>
+        <div class="body">
+          <b>DeepSeek · 只在用户开启时调用 · 可一键关闭</b>
+          <span>只做三件「非大模型不可」的事：面试复盘语义归因、JD 技能差距分析、面试官追问训练</span>
+          <span>共同特征：输入是非结构化的人类语言，输出要落进数据模型</span>
+        </div>
+      </div>
+      <div class="layer l3">
+        <div class="tag">L3 · 降级</div>
+        <div class="body">
+          <b>网络不可达 / 密钥无效 / 用户关闭 → 自动回落 L1</b>
+          <span>UI 明示「本地模式」，并解释哪些功能暂不可用、为什么</span>
+          <span>关键：<strong>降级不是崩溃，是设计</strong>。评审看到这段提示会明白这一点</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card tint">
+      <h4>答辩时可以直接说的一句话</h4>
+      <p style="margin-bottom:0;color:#a8f0e6;font-size:15px"><strong>「能端侧的一律端侧，只有非结构化的人类语言才上云。」</strong></p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">04</div>
+      <h2>DeepSeek 接入规范</h2>
+      <div class="note">参数与成本，2026-09-18 核实</div>
+    </div>
+
+    <h3>端点与模型</h3>
+<pre><code>POST https://api.deepseek.com/chat/completions
+Authorization: Bearer sk-xxxxxxxx
+Content-Type: application/json
+
+{
+  "model": "deepseek-flash",
+  "messages": [ {"role":"system","content":"…"}, {"role":"user","content":"…"} ],
+  "stream": false,
+  "temperature": 0.2,
+  "max_tokens": 1500,
+  "response_format": { "type": "json_object" },
+  "thinking": { "type": "disabled" }
+}</code></pre>
+
+    <h3>当前价目与成本估算</h3>
+    <p>DeepSeek 自 2026-08-17 起启用峰谷定价，高峰时段为<strong>周一至周五 9:00–12:00 与 14:00–18:00</strong>，其余时段为空闲，空闲价是高峰的一半。</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:160px">模型</th><th>输入（缓存命中）</th><th>输入（未命中）</th><th>输出</th><th>上下文</th><th>并发</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="hi">deepseek-flash</td>
+          <td>0.02 / 0.04 元</td>
+          <td class="hi">1 / 2 元</td>
+          <td class="hi">4 / 8 元</td>
+          <td>1M</td><td>2500</td>
+        </tr>
+        <tr>
+          <td class="hi">deepseek-v4-pro</td>
+          <td>0.15 / 0.30 元</td>
+          <td>4.5 / 9 元</td>
+          <td>13.5 / 27 元</td>
+          <td>1M</td><td>500</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size:12.5px;color:var(--tx3)">单位：元 / 百万 tokens，格式为「空闲 / 高峰」。两个模型都支持 JSON 输出与 Function Calling。</p>
+
+    <div class="card good">
+      <h4>成本低到可以忽略</h4>
+      <p>一次面试复盘分析，输入约 2000 token（含 system prompt 与回忆原文）、输出约 1000 token。用 <code>deepseek-flash</code> 按高峰价计算：</p>
+      <p style="font-family:ui-monospace,Consolas,monospace;font-size:13px;color:#a8f0e6">2000 ÷ 1e6 × 2  +  1000 ÷ 1e6 × 8  =  0.004 + 0.008  =  <strong>0.012 元</strong></p>
+      <p style="margin-bottom:0"><strong>约 1.2 分钱一次。</strong>就算演示期间反复跑 200 次，总成本 2.4 元。整个比赛周期花的钱不够买一瓶水 —— 所以「成本」不是这个方案要考虑的问题，「质量」和「可信度」才是。</p>
+    </div>
+
+    <h3>三个必须调对的参数</h3>
+    <table>
+      <thead><tr><th style="width:210px">参数</th><th style="width:150px">设置</th><th>为什么</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="hi"><code>response_format</code></td>
+          <td><code>json_object</code></td>
+          <td>不设的话模型会返回带说明文字和 <code>```json</code> 包裹的内容，直接 <code>JSON.parse</code> 必崩。<strong>这是新手第一大坑</strong>，实测踩中率极高。</td>
+        </tr>
+        <tr>
+          <td class="hi"><code>thinking</code></td>
+          <td><code>disabled</code></td>
+          <td>官方默认开启思考模式。结构化打分任务不需要长链推理，关掉后响应更快、更便宜、输出更稳定。若要最强归因能力，改 <code>enabled</code> 或换 <code>deepseek-v4-pro</code>。</td>
+        </tr>
+        <tr>
+          <td class="hi"><code>temperature</code></td>
+          <td><code>0.2</code></td>
+          <td>打分必须可复现。同一份面试回忆跑两次，分数如果差 20 分，雷达图就失去意义了。低温度是「可比较」的前提。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="card alert">
+      <h4>⚠ 一个待实测的兼容性问题</h4>
+      <p style="margin-bottom:0">「思考模式」与「JSON 输出」能否同时开启，官方文档没有明确说明（只提到 FIM 补全仅支持非思考模式）。我们的方案里两者是分开的 —— 结构化任务用 <code>disabled</code>，所以不受影响。<strong>但第一次跑通时请顺手测一下 <code>enabled</code> + <code>json_object</code>，记下结果。</strong>这是答辩时可能被技术专家问到的一个点。</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">05</div>
+      <h2>三个 Prompt 场景</h2>
+      <div class="note">产品的灵魂在这三页里</div>
+    </div>
+
+    <p>「加 AI」的正确姿势不是加一个聊天框，而是<strong>想清楚大模型在哪一步不可替代</strong>。我只找到三处。完整 Prompt 已写进代码（<code>PromptLibrary.ets</code>），这里说设计原则。</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:148px">功能</th><th>输入 → 输出</th><th>为什么必须用 LLM</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="hi">复盘 → 能力雷达</td>
+          <td>一段口语化的面试回忆 → 5 个维度的分数 + 证据句 + 补强建议</td>
+          <td>把情绪化叙述（「问的都不会，感觉凉了」）映射成可量化指标，规则引擎做不到</td>
+        </tr>
+        <tr>
+          <td class="hi">JD → 技能差距</td>
+          <td>招聘 JD 原文 + 我的技能底牌 → 必须项/加分项逐条标匹配状态 + 备考清单</td>
+          <td>JD 写法千变万化，关键词匹配抓不到「熟悉高并发场景下的数据一致性」= 分布式事务 + 锁</td>
+        </tr>
+        <tr>
+          <td class="hi">追问教练</td>
+          <td>雷达图上最弱的两个维度 → 面试官连问三轮，每轮指出具体漏洞</td>
+          <td>需要理解上下文并针对性地挑刺，是典型的生成式任务</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="card alert">
+      <h4>让「AI 打分」不变成「AI 算命」的三条铁律</h4>
+      <p>这三条不是随便定的，是这类产品翻车的三个主要原因，每一条都写死在 prompt 里：</p>
+      <ol style="margin-bottom:0">
+        <li><strong>判分标准必须写进 prompt。</strong>只说「给 0–100 分」，模型会随便给；给出分档（0–40 答错 / 41–60 答不完整 / 61–80 细节含糊 / 81–100 能延伸），分数才有可比性。</li>
+        <li><strong>必须显式禁止编造。</strong>不写这条，模型会为了「把雷达图填满」凭空给你补出一个六边形战士 —— 这是最常见的幻觉形式，因为它看起来「很合理」。我们的规则是：回忆里没提到的维度，score 记 0 并注明「本次面试未涉及」。</li>
+        <li><strong>证据必须引用原文。</strong>每个分数都要给出对应的原话片段，禁止自己造句。这条让用户能自己核对分数是否离谱，也让答辩时你能解释「分数是怎么来的」。</li>
+      </ol>
+    </div>
+
+    <div class="card tint">
+      <h4>这三条同时就是答辩的标准答案</h4>
+      <p style="margin-bottom:0">被问「你怎么保证 AI 不胡说」—— 你不需要讲技术原理，只需要把上面三条念出来，再说一句：<strong>「我们做了一个可复现的评估器，不是一个问答机器人。」</strong></p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">06</div>
+      <h2>密钥策略</h2>
+      <div class="note">这里出事是要花钱的</div>
+    </div>
+
+    <table>
+      <thead><tr><th style="width:210px">方案</th><th style="width:120px">安全性</th><th style="width:110px">演示便利</th><th>答辩观感</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="hi">硬编码进代码</td>
+          <td class="no">必然泄露</td>
+          <td class="ok">最省事</td>
+          <td class="no">若被扒出或质疑，是工程素养扣分项</td>
+        </tr>
+        <tr>
+          <td class="hi">内置限额 key + 设置页 BYOK</td>
+          <td class="mid">可控</td>
+          <td class="ok">最省事</td>
+          <td class="ok">可讲成隐私设计加分项</td>
+        </tr>
+        <tr>
+          <td class="hi">自建代理转发</td>
+          <td class="ok">最好</td>
+          <td class="no">多一层依赖</td>
+          <td class="mid">但评委可能问「这还算鸿蒙应用吗」，且断网即死</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>推荐做法：内置限额 key 兜底 + 设置页支持用户自带</h3>
+    <ul>
+      <li><strong>单独申请一个 key</strong>，只充 20 元，在 DeepSeek 控制台设好消费上限。绝对不要用主账号。</li>
+      <li>设置页提供密钥输入框，用户填了就覆盖内置的。<strong>密钥只存本机偏好库，不上传任何服务器。</strong></li>
+      <li>答辩口径：「我们采用 BYOK，用户自带密钥，密钥不经过我们的服务器。」—— 这句话把一个安全妥协讲成了隐私设计。</li>
+    </ul>
+
+    <div class="card">
+      <h4>为什么不推荐给学生队做代理</h4>
+      <p style="margin-bottom:0">自建一个转发函数（云函数 / Worker）技术上只要半小时，但它引入了一个外部依赖：演示现场如果那个函数挂了或没配好，整个 AI 功能哑掉。而它的收益（防密钥泄露）对一个 12 天工期的参赛作品来说并不关键 —— 用限额 key 把最坏损失锁在 20 元以内，更划算。<strong>把省下的时间投到演示视频上，回报率高得多。</strong></p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">07</div>
+      <h2>建工程参数（你要的）</h2>
+      <div class="note">照着填</div>
+    </div>
+
+    <table>
+      <thead><tr><th style="width:210px">项</th><th>值</th></tr></thead>
+      <tbody>
+        <tr><td class="hi">Project name</td><td><code>Lighthouse</code></td></tr>
+        <tr><td class="hi">Bundle name</td><td><code>com.wuit.lighthouse</code>（沿用你 CampusSecondhand 的 <code>com.wuit.</code> 前缀）</td></tr>
+        <tr><td class="hi">Save location</td><td><code>D:\work\DevEcoStudioProject\Lighthouse</code></td></tr>
+        <tr><td class="hi">Compatible SDK</td><td><code>6.1.1(24)</code> —— 和你 CampusSecondhand 保持一致，环境已验证可用</td></tr>
+        <tr><td class="hi">Module name</td><td><code>entry</code></td></tr>
+        <tr><td class="hi">Language / Template</td><td>ArkTS / <code>Empty Ability</code></td></tr>
+        <tr style="background:rgba(255,180,84,.06)">
+          <td class="hi" style="color:var(--gold)">Device type ⚠</td>
+          <td style="color:var(--gold)"><strong>Phone + Tablet + 2in1 三个全勾。</strong>「一次开发多端部署」是你的核心创新分来源，建工程时没勾，后面要手改 <code>module.json5</code> 的 <code>deviceTypes</code>，还容易漏。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>关于作品名</h3>
+    <div class="card good">
+      <h4>我的推荐：保留「灯塔 / Lighthouse」</h4>
+      <p>你让我再想一个名字，但我的判断是<strong>不用换</strong>，理由有三条：</p>
+      <ul style="margin-bottom:8px">
+        <li><strong>寓意准。</strong>秋招是一场能见度极低的航行 —— 投出去没回音、面完不知道差在哪、offer 什么时候来全无预兆。灯塔是在迷雾里唯一不动的东西。</li>
+        <li><strong>和产品形态同构。</strong>服务卡片常驻在桌面 —— 灯塔一直在那儿亮着，你不看它，它也在。这个隐喻在答辩时是能讲出来的。</li>
+        <li><strong>工程角度干净。</strong><code>Lighthouse</code> 无拼写歧义，bundleName 好写，且已写进设计文档，不必返工。</li>
+      </ul>
+      <p style="margin-bottom:0">如果你的直觉是想换个感觉，备选两个：<strong>「回声 Echo」</strong>（点出复盘——把面试的回声变成地图，偏文艺）、<strong>「罗盘 Compass」</strong>（偏决策工具感）。但我建议别折腾，把时间花在演示上。</p>
+    </div>
+
+    <h3>建好工程后要补的两样</h3>
+    <ul>
+      <li><strong>服务卡片</strong> —— DevEco 新建模板里没有。右键 <code>entry</code> → <code>New</code> → <code>Service Widget</code>，尺寸建议建 2×2 与 2×4 两种。</li>
+      <li><strong>网络权限</strong> —— 在 <code>entry/src/main/module.json5</code> 的 <code>requestPermissions</code> 里加 <code>ohos.permission.INTERNET</code>（normal 级，声明即用，不会弹授权框）。</li>
+    </ul>
+
+    <h3>AI 代码放哪</h3>
+    <p>我把三个可直接拷进工程的 ArkTS 文件写好了，放在 <code>D:\work\workbuddy\lighthouse-guanggu\ai-code\</code>：</p>
+    <div class="card filelist">
+      <div class="d">Lighthouse/</div>
+      <div class="d">└─ entry/src/main/ets/</div>
+      <div class="d">&nbsp;&nbsp;&nbsp;├─ common/</div>
+      <div>&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;└─ <span class="new">AiTypes.ets</span> &nbsp;← 类型契约 + 端点/模型/超时常量</div>
+      <div class="d">&nbsp;&nbsp;&nbsp;└─ service/</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="new">DeepSeekClient.ets</span> &nbsp;← HTTP 客户端（超时/重试/错误分类/JSON 剥离）</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="new">PromptLibrary.ets</span> &nbsp;← 三个 Prompt 模板 + 离线提示文案</div>
+    </div>
+
+    <div class="card alert">
+      <h4>⚠ 必须说清楚的一点</h4>
+      <p style="margin-bottom:0">这三个文件我<strong>没有在 DevEco 里编译验证过</strong>（你这台机器上没有这个工程）。我已经按 ArkTS 严格模式的规范写（显式类型标注、不用 <code>any</code>、对象字面量配接口、Promise 显式签名），但首次编译仍可能报几处类型错误。<strong>把报错原文贴给我，我直接改。</strong>不要自己硬猜。</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">08</div>
+      <h2>答辩预演：AI 相关必问四题</h2>
+      <div class="note">背下来</div>
+    </div>
+
+    <h3>Q1：你们这个 AI，是不是就是套壳 DeepSeek？</h3>
+    <p>不是，从三个层面都不是：</p>
+    <ul>
+      <li><strong>架构上：</strong>能离线的一律端侧 —— 语音速记用鸿蒙 Core Speech Kit 的离线模型，投递解析用本地规则引擎。只有「把非结构化的人类语言变成结构化指标」这一步才上云。</li>
+      <li><strong>产品上：</strong>模型输出不直接给用户看，而是落进数据模型，变成可追踪、可对比的量化指标。下周你再复盘一次，雷达图会告诉你有没有进步 —— 这是聊天框给不了的。</li>
+      <li><strong>工程上：</strong>判分标准写死在 prompt 里（分档 + 证据引用 + 未涉及记 0），保证同一份输入得到稳定可比的结果。我们做的是可复现的评估器。</li>
+    </ul>
+
+    <h3>Q2：AI 给的分数准吗？</h3>
+    <p>不追求绝对准确，追求<strong>相对可比</strong>。它衡量的是「你在表达里暴露了多少漏洞」，不是「你的真实技术水平」。这个定位我们写进了产品说明，也写进了 prompt。用户能看到每个分数对应的原话证据，可以自己判断是否离谱。</p>
+
+    <h3>Q3：网络断了怎么办？</h3>
+    <p>自动降级到本地引擎，界面上会明示「本地模式」并说明哪些功能暂不可用。<strong>这不是兜底，这是设计</strong> —— 我们的目标用户是挤地铁去面试的应届生，地铁里就是没网；是车间里盯着设备的技术员，车间里信号只有一格。如果一个求职工具必须联网才能用，那它就不该叫「随身助手」。</p>
+
+    <h3>Q4：数据安全怎么保证？</h3>
+    <p>三层：简历、薪资、公司名等敏感字段本地存储，不上传；送到模型的只有脱敏后的复盘文本片段；设置页提供「纯离线模式」开关，一键关闭所有云端调用。</p>
+
+    <div class="card tint">
+      <h4>合规：主动说，别等被问</h4>
+      <p style="margin-bottom:0">调用已备案的大模型服务（DeepSeek）属于合规路径。产品不上架、不面向社会公众提供生成式服务，仅作为工具类应用的辅助功能。<strong>在 PPT 里主动写这一句</strong> —— 评委看到会知道你想过这个问题，这是加分项，不是减分项。</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">09</div>
+      <h2>排期怎么变 &amp; 风险</h2>
+      <div class="note">AI 插在哪一天</div>
+    </div>
+
+    <p>原排期里 D6–D8 是「复盘 + 雷达图」，AI 接入是 D8–D9 的活。但有一条硬要求：</p>
+
+    <div class="card alert">
+      <h4>D1 就把 DeepSeek 跑通，别等到 D8</h4>
+      <p style="margin-bottom:0">在工程里写一个最小的连通性测试页（一个按钮、一次请求、把响应原文打到日志），<strong>今天就该做</strong>。要验证四件事：① 模拟器能不能访问外网；② 宿主机的系统代理会不会干扰；③ 密钥是否有效；④ <code>thinking:disabled</code> 与 <code>json_object</code> 能否并用。这几件事任何一件出问题，都会改变后面 10 天的设计。等 D8 才发现，就来不及了。</p>
+    </div>
+
+    <table>
+      <thead><tr><th style="width:220px">风险</th><th style="width:78px">等级</th><th>应对</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="hi">密钥泄露被刷</td>
+          <td class="mid">中</td>
+          <td>单独申请 + 控制台设限额 + 设置页支持 BYOK。最坏损失锁死在 20 元。</td>
+        </tr>
+        <tr>
+          <td class="hi">演示现场断网</td>
+          <td class="mid">中</td>
+          <td>三层降级已设计好；<strong>演示视频用录屏，不要现场联网跑</strong>。</td>
+        </tr>
+        <tr>
+          <td class="hi">ArkTS 严格模式编译报错</td>
+          <td class="mid">中</td>
+          <td>代码未编译验证。首次编译报错贴给我，我按报错逐处修。</td>
+        </tr>
+        <tr>
+          <td class="hi">模型幻觉编造能力项</td>
+          <td class="mid">中</td>
+          <td>prompt 三条铁律（分档标准 / 未涉及记 0 / 证据引用）已内置。</td>
+        </tr>
+        <tr>
+          <td class="hi">思考模式与 JSON 输出兼容性未知</td>
+          <td class="ok">低</td>
+          <td>方案里两者分开使用，不受影响。首测时顺手记录结论即可。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============================================================ -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">10</div>
+      <h2>今天要做的三件事</h2>
+    </div>
+
+    <ol>
+      <li><strong>建工程</strong> —— 按第 07 节参数建 <code>Lighthouse</code>。<strong>Device type 三个全勾。</strong></li>
+      <li><strong>申请一个单独限额的 DeepSeek key</strong> —— 充值 20 元，设消费上限。别用主账号。</li>
+      <li><strong>跑通连通性测试</strong> —— 把 <code>ai-code/</code> 下三个文件拷进工程，写一个按钮触发一次请求，把响应和报错都打到日志。这一步过了，后面才有得谈。</li>
+    </ol>
+
+    <div class="card tint">
+      <p style="margin-bottom:0">跑通之后告诉我三件事：<strong>编译有没有报错、请求耗时多少、返回的是不是合法 JSON</strong>。我据此决定 D8 那天是走「AI 复盘」还是退到「本地规则引擎 + 人工选择维度」。</p>
+    </div>
+  </section>
+
+  <footer>
+    灯塔 Lighthouse · AI 接入方案 v1.0 &nbsp;|&nbsp; 2026-09-18 &nbsp;|&nbsp; 2026 第二届「光谷杯」鸿蒙生态创新大赛 · 赛道一<br>
+    <span style="color:#4a5c78">DeepSeek 模型名 / 价目 / 能力已对照官方文档核实（2026-09-18）；鸿蒙端侧 AI 能力已对照华为开发者文档核实</span>
+  </footer>
+
+</div>
+</body>
+</html>
