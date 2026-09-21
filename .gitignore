@@ -1,0 +1,17 @@
+/oh_modules
+/node_modules
+/local.properties
+/.idea
+**/build
+**/_build_prev
+/.hvigor
+/.appanalyzer
+.cxx
+/.clangd
+/.clang-format
+/.clang-tidy
+**/.test
+*.bak
+*.log
+__pycache__/
+secrets/
