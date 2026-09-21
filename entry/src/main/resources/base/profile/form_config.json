@@ -1,0 +1,44 @@
+{
+  "forms": [
+    {
+      "name": "rhythm_card",
+      "displayName": "$string:widget_main_display",
+      "description": "$string:widget_main_desc",
+      "src": "./ets/widget/pages/WidgetCard.ets",
+      "uiSyntax": "arkts",
+      "isDefault": true,
+      "supportDimensions": [
+        "2*4"
+      ],
+      "defaultDimension": "2*4",
+      "updateEnabled": true,
+      "updateDuration": 1,
+      "isDynamic": true,
+      "supportDeviceTypes": [
+        "phone",
+        "tablet",
+        "2in1"
+      ]
+    },
+    {
+      "name": "rhythm_mini",
+      "displayName": "$string:widget_mini_display",
+      "description": "$string:widget_mini_desc",
+      "src": "./ets/widget/pages/MiniCard.ets",
+      "uiSyntax": "arkts",
+      "isDefault": false,
+      "supportDimensions": [
+        "2*2"
+      ],
+      "defaultDimension": "2*2",
+      "updateEnabled": true,
+      "updateDuration": 1,
+      "isDynamic": true,
+      "supportDeviceTypes": [
+        "phone",
+        "tablet",
+        "2in1"
+      ]
+    }
+  ]
+}
