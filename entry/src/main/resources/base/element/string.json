@@ -1,0 +1,44 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "灯塔模块"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "灯塔 · 秋招数据作战台"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "灯塔"
+    },
+    {
+      "name": "widget_label",
+      "value": "灯塔节奏哨兵"
+    },
+    {
+      "name": "widget_desc",
+      "value": "秋招关键节点与实时倒计时"
+    },
+    {
+      "name": "widget_main_display",
+      "value": "灯塔 · 节奏哨兵"
+    },
+    {
+      "name": "widget_main_desc",
+      "value": "最近三个关键节点与倒计时，不用打开应用就知道接下来该做什么"
+    },
+    {
+      "name": "widget_mini_display",
+      "value": "灯塔 · 下一件事"
+    },
+    {
+      "name": "widget_mini_desc",
+      "value": "只盯最紧急的那一个节点，一宫格也看得清"
+    },
+    {
+      "name": "mic_reason",
+      "value": "用于语音速记：把你说的话在设备本地转成文字，录音不上传"
+    }
+  ]
+}
