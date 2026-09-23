@@ -993,11 +993,19 @@ export class VoiceMemo {
     }
 
     // ⚠ 收尾要等**最终结果**，不能只等固定时长就汇总。
-    //   引擎是流式的：finish 之后它还在把积压的音频算完，模拟器上这一步可能好幾秒。
+    //   引擎是流式的：finish 之后它还在把积压的音频算完，模拟器上这一步可能好几秒。
     //   第一版只等 4 秒就汇总，明明后面出了完整句子，却记成了半句"明天下"。
-    for (let i: number = 0; i < 150 && !completed && finals === 0; i++) {
+    //   ⚠⚠ 2026-09-22 再修：**15 秒也不够**。13 套验收连着跑时模拟器负载高，
+    //      最终结果在汇总**之后**才到 —— 日志现场是「自检结论：FAIL（全不沾边）」
+    //      紧跟着才是 `isFinal=true isLast=true "明天下午2点面试…"`，"字其实识对了"。
+    //      这种假红的代价很大：会让人去查音频格式、查麦克风，而真因只是等得不够。
+    //      ⇒ 预算提到 45 秒，且把**实际等了多久**打出来，下次不用再靠猜。
+    const waitT0: number = Date.now();
+    for (let i: number = 0; i < 450 && !completed && finals === 0; i++) {
       await sleep(100);
     }
+    const waited: number = Date.now() - waitT0;
+    Log.i(`语音自检：等最终结果 ${waited}ms（final=${finals} completed=${completed}）`);
     // 拿到 final 后再多给 1 秒，让 onComplete 之类的收尾回调走完
     await sleep(1000);
 
@@ -1022,6 +1030,10 @@ export class VoiceMemo {
       Log.e(`语音自检结论：FAIL（识别过程报错 code=${errCode}）`);
     } else if (got.length === 0) {
       Log.e('语音自检结论：FAIL（引擎全程无错，但一个字都没识别出来）');
+    } else if (finals === 0) {
+      // ⚠ 超时≠识别错。以前这条落到下面的「全不沾边」，诊断方向直接跑偏。
+      Log.e(`语音自检结论：TIMEOUT（等了 ${waited}ms 没等到最终结果，`
+        + `只有中间结果「${got}」—— 引擎太慢，不是识别失败，重跑一次）`);
     } else if (hit.length === 0) {
       Log.e(`语音自检结论：FAIL（出字了但全不沾边，可能是音频格式或节奏不对）`);
     } else {
