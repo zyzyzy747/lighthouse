@@ -1,7 +1,7 @@
 import { promptAction } from '@kit.ArkUI';
 import { Palette, Metrics } from '../common/Theme';
 import { Application, ReviewRecord, InterviewRound } from '../common/Types';
-import { ReviewAnalysis, RadarDimension, RadarEnvelope, AiErrorKind } from '../common/AiTypes';
+import { ReviewAnalysis, RadarDimension, RadarEnvelope, AiErrorKind, parseRadarEnvelope } from '../common/AiTypes';
 import { ApplicationRepo } from '../repository/ApplicationRepo';
 import { ReviewRepo } from '../repository/ReviewRepo';
 import { ReviewAnalyzer, AnalyzeOutcome } from '../service/ReviewAnalyzer';
@@ -237,32 +237,9 @@ export struct ReviewView {
    * 解析失败一律当「没有雷达」处理，绝不让坏数据把页面搞崩。
    */
   private envelopeOf(r: ReviewRecord): RadarEnvelope | undefined {
-    if (!this.hasRadar(r)) {
-      return undefined;
-    }
-    try {
-      // 先按 v2 信封解析。ArkTS 严格模式不允许把同一个值当两种接口混用，
-      // 所以 v1 兼容走「同一段 JSON 换一个类型视角再解析一次」，而不是复用变量。
-      const env: RadarEnvelope = JSON.parse(r.radarJson) as RadarEnvelope;
-      if (env.analysis !== undefined) {
-        return env;
-      }
-      // v1 裸格式：本体就是它自己，来源无从考证 —— 留空，不编一个
-      const bare: ReviewAnalysis = JSON.parse(r.radarJson) as ReviewAnalysis;
-      const legacy: RadarEnvelope = {
-        v: 1,
-        analysis: bare,
-        fromCloud: false,
-        engine: '',
-        latencyMs: 0,
-        tokens: 0,
-        analyzedAt: 0
-      };
-      return legacy;
-    } catch (e) {
-      Log.w(`radarJson 解析失败 id=${r.id}`);
-      return undefined;
-    }
+    // 具体的版本兼容与容错全部收在 AiTypes.parseRadarEnvelope 里 ——
+    // 「灯塔助手」的工具层要用同一份逻辑，两处各写一遍迟早会不一致。
+    return parseRadarEnvelope(r.radarJson);
   }
 
   /** 解析已存的分析结果。解析失败当没有处理，不影响页面渲染。 */
@@ -308,7 +285,7 @@ export struct ReviewView {
    * 来源行颜色：云端=绿、本地降级=橙、无记录=灰。
    * 「这条不是云端给的」应该一眼可见，而不是让用户去读小字。
    */
-  private noteColor(r: ReviewRecord): string {
+  private noteColor(r: ReviewRecord): Resource {
     if (this.openId === r.id && this.engineNote.length > 0) {
       return this.degradeNote.length > 0 ? Palette.ACCENT : Palette.OK;
     }
@@ -358,7 +335,7 @@ export struct ReviewView {
     return a !== undefined && a.topWeakness !== undefined ? a.topWeakness : '';
   }
 
-  private scoreColor(v: number): string {
+  private scoreColor(v: number): Resource {
     if (v <= 0) {
       return Palette.TX_3;
     }
