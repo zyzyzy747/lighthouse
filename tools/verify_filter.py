@@ -182,7 +182,7 @@ def hide_keyboard():
             return
         time.sleep(2.0)
     print("  ！BACK 之后读不到快记页，重新拉起应用")
-    vw.shell(f"aa start -a EntryAbility -b {BUNDLE}")
+    vw.shell(f"aa start -a EntryAbility -b {BUNDLE} --pi lh_autologin 1")
     time.sleep(6)
 
 
@@ -253,25 +253,11 @@ def main():
     time.sleep(2)
     hdc("install", HAP)
     time.sleep(2)
-    vw.shell(f"aa start -a EntryAbility -b {BUNDLE}")
-    time.sleep(8)
-
-    lay = vw.dump_layout("flt0")
-    if not tap(lay, "我的"):
-        check(False, "", "点不到「我的」Tab")
-        return
-    time.sleep(3)
-    layer = None
-    for i in range(8):
-        layer = vw.dump_layout(f"flt_demo{i}")
-        if tap(layer, "载入演示数据"):
-            break
-        swipe_up()
-    if layer is None:
-        check(False, "", "找不到「载入演示数据」按钮")
-        return
-    time.sleep(4)
-    print("  演示数据已载入")
+    # 「载入演示数据」已搬进设置页 —— 不再去界面上找按钮（那要先切「我的」→进设置→滚动，
+    # 长距离滚动在这个模拟器上不可靠），走 lh_load_demo 开关带参启动，一次到位。
+    vw.shell(f"aa start -a EntryAbility -b {BUNDLE} --pi lh_autologin 1 --pi lh_load_demo 1")
+    time.sleep(10)
+    print("  演示数据已载入（lh_load_demo 开关）")
 
     lay = vw.dump_layout("flt1")
     tap(lay, "快记")
@@ -292,6 +278,15 @@ def main():
     # ⚠ 只判屏上第一张卡（明源云）—— 长距离滚动在模拟器上不稳（实测连续 7 次 dump
     #   内容一模一样），用不着为了一条断言去赌手势。
     #   "没节点的记录不挂行"由 ⑥ 的「有安排」筛选覆盖（计数 3 + 排除鼎捷/金山）。
+    # ⚠ 先回顶再滑半屏：collect_texts 会把页面滚到**底部**，不回顶的话
+    #   这里滑完停在列表中段，明源云根本不在屏上（node_lines_of 返回 None）。
+    #   另外表单加了备注区（语音速记）后变高，明源云的节点行被挤出首屏 ——
+    #   不滑的话 dump 里只有卡头没有节点行，看着像"节点没渲染"，
+    #   其实是"被屏幕底边裁掉了"。回顶 + 滑半屏后首卡正好完整露出。
+    scroll_to_top()
+    swipe_up()
+    time.sleep(1.5)
+    lay = vw.dump_layout("flt_nodes1")
     rows = node_lines_of(lay, "明源云")
     check(rows is not None and len(rows) >= 1,
           f"「明源云」卡片区间里找到它自己的节点行：{rows}",
