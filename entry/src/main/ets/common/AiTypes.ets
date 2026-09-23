@@ -183,6 +183,45 @@ export interface RadarEnvelope {
   analyzedAt: number;         // 毫秒时间戳
 }
 
+/**
+ * 解析落库的雷达 JSON。
+ *
+ * 两种格式：v2 是上面那个信封；v1（历史数据）本体就是 ReviewAnalysis 本身。
+ * 分辨方法：有没有 analysis 字段。
+ *
+ * ⚠ 这一份是**复盘页和「灯塔助手」共用的**：两边各写一遍迟早会分叉
+ *   （改了其中之一、另一个还停在旧逻辑），所以抽在这里。
+ * ⚠ 解析失败一律返回 undefined（"没有雷达"），绝不让坏数据崩页面 ——
+ *   宁可少显示一张图，也不要显示一个错的分析。
+ */
+export function parseRadarEnvelope(json: string): RadarEnvelope | undefined {
+  if (json === undefined || json === null || json.length === 0) {
+    return undefined;
+  }
+  try {
+    // ArkTS 严格模式不允许把同一个值当两种接口混用，所以 v1 兼容走
+    // 「同一段 JSON 换一个类型视角再解析一次」，而不是复用同一个变量。
+    const env: RadarEnvelope = JSON.parse(json) as RadarEnvelope;
+    if (env.analysis !== undefined) {
+      return env;
+    }
+    const bare: ReviewAnalysis = JSON.parse(json) as ReviewAnalysis;
+    // v1 来源无从考证 —— 留空，绝不编一个
+    const legacy: RadarEnvelope = {
+      v: 1,
+      analysis: bare,
+      fromCloud: false,
+      engine: '',
+      latencyMs: 0,
+      tokens: 0,
+      analyzedAt: 0
+    };
+    return legacy;
+  } catch (e) {
+    return undefined;
+  }
+}
+
 /** 六维雷达的固定顺序与中文名。云端返回、本地引擎、UI 绘制三方共用这一份定义 */
 export class RadarDef {
   static readonly KEYS: string[] =
