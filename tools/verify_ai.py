@@ -44,17 +44,31 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SHOTS = os.path.join(HERE, "_shots")
 DBDUMP = os.path.join(HERE, "_dbdump")
 
-# 应用调色板（与 common/Theme.ets 保持一致）
-C_PRIMARY = (0x4A, 0x9E, 0xFF)
-C_ACCENT = (0xFF, 0xB0, 0x20)
+# 应用调色板（与 resources/{base,dark}/element/color.json 保持一致）
+#
+# ⚠⚠ **两套都必须留**：应用是**跟随系统深浅色**的（颜色走 base/ 与 dark/ 两套资源），
+#   只写深色那一套，模拟器一旦处在浅色模式，"按颜色找蓝底按钮"就全部落空，
+#   报出来的是「复盘页找不到「生成能力雷达」入口」—— 而截图里三个蓝按钮排得整整齐齐。
+#   实测浅色 lh_primary=#1F6FEB、深色 lh_primary=#4A9EFF，红通道差 43，远超 tol=20。
+#   （2026-09-22 实测踩到：全量回归里 ai 这一套挂在这，单看截图完全看不出问题。）
+#
+# ★ 根治办法不是"把两套色都列上"，而是**首选控件树按文字找** ——
+#   见 find_radar_entry()：Button 节点自带 text='生成能力雷达' 且 clickable=true，
+#   这条路与主题无关。颜色只留作兜底。
+C_PRIMARY_DARK = (0x4A, 0x9E, 0xFF)
+C_PRIMARY_LIGHT = (0x1F, 0x6F, 0xEB)
+C_PRIMARY = C_PRIMARY_DARK          # 旧引用保持可用
+C_ACCENT_DARK = (0xFF, 0xB0, 0x20)
+C_ACCENT_LIGHT = (0xB2, 0x6A, 0x00)
+C_ACCENT = C_ACCENT_DARK
 C_OK = (0x3D, 0xD6, 0x8C)
 C_DANGER = (0xFF, 0x5C, 0x5C)
 
-# 底部四栏：屏宽 1256，均分 314
-TAB_Y = 2560
-TAB_X = {"快记": 157, "地图": 471, "复盘": 785, "我的": 1099}
+# 底部 Tab：⛔ 硬编码坐标已作废（原先对着四等分屏宽量出来，加第五个 Tab 后每格变窄、中心平移）。
+#    现在一律按文字定位，实现统一在 verify_widget.tap_tab —— 以后再加 Tab 也不用改脚本。
 
 _fails: list = []
+_oks: list = []
 
 
 # ───────────────────────── 基础工具 ─────────────────────────
@@ -69,6 +83,7 @@ def shell(cmd, timeout=90):
 
 
 def ok(msg):
+    _oks.append(msg)
     print(f"  \u2713 {msg}")
 
 
@@ -91,8 +106,15 @@ def tap(x, y, wait=1.6):
 
 
 def tap_tab(name, wait=2.0):
-    tap(TAB_X[name], TAB_Y, wait=wait)
-    print(f"  → 切到「{name}」页")
+    """点底部 Tab。
+
+    实现统一放进 verify_widget.tap_tab（按文字定位），这里只是转发 ——
+    ⛔ 以前是 `tap(TAB_X[name], TAB_Y)`，坐标对着**四个等分 Tab**量的：
+      加第五个 Tab（助手）之后每格变窄、中心平移，那组坐标全部指错，
+      而且点下去一声不响，要等后面每一步都找不到控件才暴露出来（2026-09-22）。
+    """
+    import verify_widget as vw
+    return vw.tap_tab(name, wait=wait)
 
 
 def shot(name):
@@ -222,7 +244,7 @@ def install(keep):
 
     shell(f"aa force-stop {BUNDLE}")
     time.sleep(1)
-    out = shell(f"aa start -a {ABILITY} -b {BUNDLE}")
+    out = shell(f"aa start -a {ABILITY} -b {BUNDLE} --pi lh_autologin 1")
     if "successfully" not in out.lower() and "start" not in out.lower():
         bad(f"启动失败：{out}")
         return False
@@ -233,42 +255,20 @@ def install(keep):
 
 def load_demo():
     print("\n== 2/6 灌入演示数据")
-    tab = "我的" if not ARGS.keep else "我的"
-    tap_tab(tab)
-    img = shot("ai_01_profile_empty.jpeg")
-
-    # 「我的」页有两个蓝底按钮：填入 API Key（上）和 载入演示数据（下）。
-    # 取最靠下的那个，并做一次尺寸合理性校验（宽而扁 = 按钮）。
-    blues = find_blocks(img, C_PRIMARY, tol=20, min_area=8000)
-    if not blues:
-        bad("「我的」页没找到蓝色按钮，截图 ai_01_profile_empty.jpeg 可查")
+    # 「载入演示数据」已搬进设置页 —— 原来在「我的」页按蓝底颜色试探按钮的写法随之失效。
+    # 改走 lh_load_demo 开关：force-stop 后带参冷启动，一次到位；写没写成功看 hilog。
+    shell(f"aa force-stop {BUNDLE}")
+    time.sleep(1)
+    out = shell(f"aa start -a {ABILITY} -b {BUNDLE} --pi lh_autologin 1 --pi lh_load_demo 1")
+    if "successfully" not in out.lower() and "start" not in out.lower():
+        bad(f"带参启动失败：{out}")
         return False
-
-    # 「我的」页有两个蓝底按钮：载入演示数据（上）、填入 API Key（下）。
-    # 两个长得一模一样，无法靠颜色区分，所以从上往下逐个试 ——
-    # 谁让 WAL 增长，谁就是真正写数据那个。点错了也不怕，收键盘重来。
-    info(f"检出 {len(blues)} 个蓝色块：")
-    for b in blues:
-        info(f"    y {b['y0']}~{b['y1']}  x {b['x0']}~{b['x1']}  {b['w']}x{b['h']}  面积 {b['area']}")
-
-    written = False
-    for i, b in enumerate(blues):
-        info(f"尝试 #{i + 1} → ({b['cx']}, {b['cy']})")
-        before = wal_size()
-        tap(b["cx"], b["cy"], wait=3.5)
-        after = wal_size()
-        info(f"    WAL {before} → {after}")
-        if after > before:
-            ok(f"数据已写入（WAL {before} → {after}，+{after - before} 字节）")
-            written = True
-            break
-        # 大概率误点了「填入 API Key」弹出了输入框，收键盘再继续
-        shell("uinput -K -d 2 -u 2")
-        time.sleep(1.5)
-
-    if not written:
-        bad("所有蓝色按钮都没能触发写入 —— 截图 ai_01_profile_empty.jpeg 可查")
+    time.sleep(10)
+    text = shell("hilog -x 2>/dev/null | grep -E '演示数据已载入' | tail -3")
+    if "演示数据已载入" not in text:
+        bad("hilog 里没有「演示数据已载入」—— lh_load_demo 开关没生效")
         return False
+    ok("数据已写入（lh_load_demo 开关）")
 
     apps = query("SELECT COUNT(*) FROM application")[0][0]
     reviews = query("SELECT COUNT(*) FROM review")[0][0]
@@ -282,34 +282,49 @@ def load_demo():
     return False
 
 
+def find_radar_entry():
+    """找「生成能力雷达」入口，返回 (cx, cy, 来源说明) 或 None。
+
+    ★ **首选控件树**：Button 节点自带 `text='生成能力雷达'` 且 `clickable=true`，
+      实测 `[105,790][1151,916]`，整块都能点。这条路**与深浅色主题无关**，
+      也不会因为按钮从"蓝底"变成"描边"而失效。
+    兜底才是截图找色：两套调色板都试，且先大后小试面积门槛
+      （未分析=蓝底大块；已分析=底 + PRIMARY 字，只是小块）。
+    """
+    import verify_widget as vw
+    lay = vw.dump_layout("ai_review")
+    for label in ("生成能力雷达", "查看能力雷达", "重新生成"):
+        hit = vw.find_text_node(lay, label, exact=True)
+        if hit:
+            return hit[0], hit[1], f"控件树·「{label}」"
+
+    img = shot("ai_02_review_list.jpeg")
+    for tint, rgb in (("深色", C_PRIMARY_DARK), ("浅色", C_PRIMARY_LIGHT)):
+        for min_area in (8000, 400):
+            blocks = find_blocks(img, rgb, tol=20, min_area=min_area)
+            if blocks:
+                info(f"控件树里没有按钮文案，退回截图找色：{tint} PRIMARY / min_area={min_area}")
+                return blocks[0]["cx"], blocks[0]["cy"], f"截图找色·{tint}·{min_area}"
+    return None
+
+
 def gen_radar():
     print("\n== 3/6 生成能力雷达")
     tap_tab("复盘")
+    time.sleep(1.5)          # 切页有 180ms 动画 + 列表异步 reload，dump 前先让它落定
+
+    hit = find_radar_entry()
+    if hit is None:
+        bad("复盘页找不到「生成能力雷达」入口，截图 ai_02_review_list.jpeg 可查")
+        return False
+    tx, ty, how = hit
+    info(f"入口定位：{how} → ({tx}, {ty})")
+
     img = shot("ai_02_review_list.jpeg")
-
-    # 未分析时按钮是 PRIMARY 蓝底；已分析时是 PANEL_2 底 + PRIMARY 字。
-    # 先找蓝底按钮。
-    blues = find_blocks(img, C_PRIMARY, tol=20, min_area=8000)
-    if not blues:
-        # 可能已有雷达（按钮变描边样式），改找"查看能力雷达"的文字色块
-        info("没找到蓝底按钮，可能已有雷达数据；找 PRIMARY 文字色块")
-        word = find_blocks(img, C_PRIMARY, tol=30, min_area=400)
-        if not word:
-            bad("复盘页找不到「生成能力雷达」入口，截图 ai_02_review_list.jpeg 可查")
-            return False
-        blues = word
-
-    info(f"检出 {len(blues)} 个候选块：")
-    for b in blues:
-        info(f"    y {b['y0']}~{b['y1']}  x {b['x0']}~{b['x1']}  {b['w']}x{b['h']}  面积 {b['area']}")
-
-    target = blues[0]
-    info(f"选最靠上的一个 → ({target['cx']}, {target['cy']})")
-
     before_shot = img
     before_wal = wal_size()
     t0 = time.time()
-    tap(target["cx"], target["cy"], wait=2)
+    tap(tx, ty, wait=2)
     # 云端最多 12 秒熔断；本地引擎瞬时。等足 14 秒再判定。
     time.sleep(14)
     elapsed = time.time() - t0
@@ -421,7 +436,7 @@ def shot_after_restart():
     # 冷启动一过就没了，界面会退回「已完成分析」这种无信息量的中性文案。
     shell(f"aa force-stop {BUNDLE}")
     time.sleep(1.5)
-    shell(f"aa start -a {ABILITY} -b {BUNDLE}")
+    shell(f"aa start -a {ABILITY} -b {BUNDLE} --pi lh_autologin 1")
     time.sleep(5)
     tap_tab("复盘")
     shot("ai_05_review_restarted.jpeg")
@@ -468,14 +483,17 @@ def main():
         shot_after_restart()
 
     print("\n" + "=" * 68)
+    # ⚠ 收尾必须是**可解析**的固定格式。原来只打「结果：全部通过 / N 项未通过」，
+    #   全量回归的汇总器读不出通过数，就把它判成"没跑到收尾" ——
+    #   明明跑完了、断言也过了，却和"脚本崩了"分不开。
+    print(f"结果：{len(_oks)} 通过 / {len(_fails)} 失败")
     if _fails:
-        print(f"结果：{len(_fails)} 项未通过")
         for f in _fails:
             print(f"  ✗ {f}")
-        sys.exit(1)
-    print("结果：全部通过")
     print(f"截图与数据库快照见 {SHOTS}")
     print("=" * 68)
+    if _fails:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
