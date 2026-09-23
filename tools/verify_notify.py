@@ -63,7 +63,9 @@ check = vw.check
 shell = vw.shell
 RESULTS = vw.RESULTS
 
-TAB_PROFILE = (1099, 2560)
+# ⛔ 已作废：加第五个 Tab（助手）之后每个格子变窄、中心平移，这个坐标现在是「助手」。
+#    一律用 vw.tap_tab("我的") —— 见 verify_widget.tap_tab 的说明。
+TAB_PROFILE_DEPRECATED = (1099, 2560)
 
 # 提醒文案的特征串：只要通知栏里出现其中之一，就说明通知真的落到了系统
 NOTIFY_MARKS = ["还有不到", "还没标记完成", "开始 ·", "还有 "]
@@ -239,11 +241,11 @@ def app_foreground(wait=3):
     步与步之间可能停在桌面、卡片管理页或通知中心上 —— 那时候去点底部 Tab
     是点在壁纸/系统 UI 上，**不报任何错**，下一步就静默失败（最难查的一类）。
     """
-    shell(f"aa start -a {ABILITY} -b {BUNDLE}")
+    shell(f"aa start -a {ABILITY} -b {BUNDLE} --pi lh_autologin 1")
     time.sleep(wait)
 
 
-TAB_LABELS = ("快记", "地图", "复盘", "我的")
+TAB_LABELS = ("快记", "地图", "复盘", "助手", "我的")
 
 
 def wait_ui_ready(timeout=45):
@@ -266,20 +268,70 @@ def wait_ui_ready(timeout=45):
 
 
 def goto_profile(wait=2.0, timeout=30):
-    """回到应用并切到「我的」页（哨兵面板在这里）。
+    """回到应用并切到「我的」页。
 
     三件事都必须等：① 应用在前台 ② 界面已经画出来（Tab 栏在）
     ③ 点了 Tab 之后「我的」页的内容真的渲染完（切页动画 180ms + reload 是异步的）。
     """
     app_foreground()
-    wait_ui_ready()
-    vw.tap(*TAB_PROFILE, wait=wait)
+    vw.wait_ui_ready()
+    vw.tap_tab("我的", wait=wait)
     t0 = time.time()
     while time.time() - t0 < timeout:
         ts = vw.texts_of(vw.dump_layout("profile_ready"))
         if "我的数据" in ts:
             return True
         time.sleep(1.2)
+    return False
+
+
+def goto_settings(wait=2.0, timeout=30):
+    """到设置页 —— 节奏哨兵面板、桌面卡片按钮**现在都在这一页**。
+
+    ⚠ 这一步是 ④（个人页瘦身 + 设置页）之后必须改的导航：
+      原来 ProfileView 一页塞八块，脚本 goto_profile() 之后直接在当前页里翻
+      「去开启 / 立刻评估提醒 / 1 小时」；现在它们整体搬进了 SettingsView。
+      不改的话表现为「页面还没起来，重来」重试三次后中止 —— 看起来像授权坏了，
+      实际是导航路径变了（2026-09-22 实踩）。
+
+   两级 + 一个原则：**不猜当前处在哪一屏，直接把它打到已知状态。**
+
+    之前试过"先 dump 一次看看是不是已经在设置页" —— 行不通：设置页是**滚动的**，
+    停在下半屏时「本地档案」根本不在树里，于是误判"不在设置页"，然后去点一个
+    已经被二级页盖住的底部 Tab（点了不算错、也不报错），后面全静默失败。
+    任何依赖滚动位置的判断都不可靠 ⇒ 改成 **force-stop + 冷启动**，
+    多花 8 秒换一个每次都一样的起点，这笔账在这个脚本里稳赚。
+
+    ⚠ 不要用 `aa start` 直接续着上一步的状态：上一步很可能停在设置页（二级页没有
+      底部 Tab），那么这一轮 wait_ui_ready 会傻等 45s 然后超时。
+    """
+    shell(f"aa force-stop {BUNDLE}")
+    time.sleep(1.5)
+    shell(f"aa start -a {ABILITY} -b {BUNDLE} --pi lh_autologin 1")
+    if not vw.wait_ui_ready():
+        print("  ⚠ 等不到 Tab 栏，界面可能没起来")
+        return False
+    vw.tap_tab("我的", wait=wait)
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        ts = vw.texts_of(vw.dump_layout("profile_ready"))
+        if "我的数据" in ts:
+            break
+        time.sleep(1.2)
+    else:
+        print("  ⚠ 没进到「我的」页，找不到进设置的入口")
+        return False
+
+    if not tap_text("设置", exact=True, tries=3):
+        print("  ⚠ 找不到「设置」入口")
+        return False
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        ts = vw.texts_of(vw.dump_layout("settings_ready"))
+        if "本地档案" in ts:
+            return True
+        time.sleep(1.2)
+    print("  ⚠ 点了设置但没进到设置页")
     return False
 
 
@@ -343,12 +395,13 @@ def step2_grant():
     #   的方式失败（实测见过一次：31 项挂 19 项，全是这一个原因级联的）。
     #   所以这里允许重试，失败时 main() 直接中止，别浪费十分钟跑出个假结论。
     for attempt in range(1, 4):
-        goto_profile()
+        # 哨兵面板在设置页里（④ 之后），不是个人页
+        goto_settings()
         if text_on_screen("通知已开启"):
             return check(True, "通知已授权（UI 显示「● 通知已开启」）", "")
 
         print(f"  未授权 → 点「去开启」触发系统弹窗（第 {attempt} 次）")
-        if not tap_text("去开启"):
+        if not tap_text("去开启", tries=9):
             print("    找不到「去开启」→ 页面可能还没起来，重来")
             continue
         allow = None
@@ -375,8 +428,8 @@ def step3_card_on_desktop():
     dump = shell(f"hidumper -s FormMgr -a '-n {BUNDLE}'")
     if "FormRecord" not in dump:
         print("  桌面上没有卡片 → 先去加一张")
-        goto_profile(wait=2)
-        tap_text("2×4 主卡", exact=True)
+        goto_settings()
+        tap_text("2×4 主卡", exact=True, tries=9)
         time.sleep(5)
         lay = vw.dump_layout("mgr")
         add = vw.find_text_node(lay, "添加至桌面", exact=True)
@@ -397,13 +450,35 @@ def step3_card_on_desktop():
 
 def step4_fire():
     print("\n== 4/8 提醒真的发出去了 ==")
-    goto_profile()
+    # 「载入演示数据」已搬进设置页 —— 改走开关（force-stop 后带参冷启动）。
+    # EntryAbility 会补一次哨兵评估，日志口径与点按钮完全一致，后面按日志断言的步骤不受影响。
+    #
+    # ⚠⚠ `--pi lh_dnd 0` —— 关掉免打扰，**这一步少了它整轮会全红**：
+    #    免打扰是按设备时钟算的（默认 22:00–08:00），而脚本什么时候跑不挑时间。
+    #    设备时钟落在凌晨时，每一次评估都被「处在免打扰时段，本次不打扰」正确地拦掉，
+    #    而那条日志**不带**「完成，发出 N 条」—— 本步正则一条都匹配不到，
+    #    表现是"哨兵发出 -1 条 / 评估 0 次"，后面 5~7 步连锁全挂（2026-09-22 实踩 17/31）。
+    #    设备时间改不掉（hdc shell date → Operation not permitted），只能显式关开关。
+    vw.shell(f"aa force-stop {BUNDLE}")
+    time.sleep(1)
     vw.clear_logs()
-    if not tap_text("载入演示数据", exact=True):
-        return check(False, "", "找不到「载入演示数据」按钮")
-    time.sleep(8)
+    vw.shell(f"aa start -a EntryAbility -b {BUNDLE} --pi lh_autologin 1 --pi lh_load_demo 1 --pi lh_dnd 0")
+    time.sleep(12)
 
     text = "\n".join(all_logs())
+    # 兜一层"这次到底是因为什么没发出去" —— 没这一句，出了事只能靠肉眼翻日志
+    ok = check("免打扰已关闭" in text, "免打扰开关已生效（不是被时钟拦的）",
+               "免打扰没关掉 —— 时钟落在静默时段时后面每一步都会被正确地拦成 0 条")
+    # ⚠ 只看「自检载入」这一路，别写成"整个日志窗口不许出现被拦"。
+    #   同一次带参启动里还会有 前台/卡片心跳 等不同来源的评估，它们在凌晨被静默是
+    #   **时段规则在正常工作** —— 断言它们不许出现，等于要求产品不许在夜里免打扰。
+    #   实测这一版就报了一次假 ✗：那行是 `哨兵评估(前台) 处在免打扰时段`，
+    #   而被本步负责的 `哨兵评估(自检载入)` 明明发出了 1 条（2026-09-22 32/33）。
+    suppressed = [l for l in text.splitlines()
+                  if "处在免打扰时段" in l and "自检载入" in l]
+    ok = check(len(suppressed) == 0, "载入那次评估没被打扰时段拦住",
+               f"载入评估被免打扰拦了：{suppressed[0][-55:] if suppressed else ''}") and ok
+
     # ⚠ 不能取第一条匹配：「载入演示数据」会触发**多次**评估，第一条往往是
     #   "数据还没写完就评估"的那一次（发出 0 条），取首条会误判成"一条都没发出去"。
     fired_list = [int(x) for x in re.findall(r"哨兵评估\([^)]*\) 完成，发出 (\d+) 条", text)]
@@ -437,10 +512,10 @@ def step5_in_panel():
 
 def step6_dedupe():
     print("\n== 6/8 同一档位不重复打扰 ==")
-    goto_profile()
+    goto_settings()
     vw.clear_logs()
     # exact=True：预览行里也有「还有不到 2 天」这类文字，子串匹配会点错节点
-    if not tap_text("立刻评估提醒", exact=True):
+    if not tap_text("立刻评估提醒", exact=True, tries=9):
         return check(False, "", "找不到「立刻评估提醒」按钮")
     time.sleep(5)
     text = "\n".join(all_logs())
@@ -458,7 +533,7 @@ def step6_dedupe():
 def step7_offline_heartbeat():
     print("\n== 7/8 ★ 应用退出后仍能提醒（卡片心跳） ==")
     print("  本步会重启模拟器，让**系统自己**去唤醒卡片进程（约 2 分钟）")
-    goto_profile()
+    goto_settings()
     vw.clear_logs()
 
     # 构造「该发未发」：改提前量 → save() 会清空去重表，但应用侧不会立刻评估（只重排系统提醒），
@@ -468,11 +543,11 @@ def step7_offline_heartbeat():
     #   死点同一个选项（上一轮脚本就是这么栽的）日志会写「去重表保留」，
     #   场景根本构造不出来，最后表现为"卡片进程没发出提醒"——查错方向完全被带偏。
     #   先点 1 小时再点 2 天：无论起点是哪个，第二次点击一定发生了变化。
-    if not tap_text("1 小时", exact=True):
+    if not tap_text("1 小时", exact=True, tries=9):
         return check(False, "", "找不到「1 小时」提前量选项")
     time.sleep(3)
     vw.clear_logs()
-    if not tap_text("2 天", exact=True):
+    if not tap_text("2 天", exact=True, tries=9):
         return check(False, "", "找不到「2 天」提前量选项")
     time.sleep(3)
     text = "\n".join(all_logs())
@@ -482,6 +557,17 @@ def step7_offline_heartbeat():
         return False
 
     # ---------------------------------------------------------------- 交给系统
+    # ⚠ 重启前必须「杀应用 + 清日志」两件事都做：
+    #   · 不停应用：它带着前台状态一起重启，系统有可能顺手把它恢复起来，
+    #     那句"应用主进程不存在"就会以假阳性挂掉。
+    #   · 不清日志：**跨重启 hilog 并不保证清空**。上面 goto_settings 那次 aa start
+    #     留下的 "ui ready / 哨兵(前台)" 会一直躺在缓冲区里，于是
+    #     "全程没有应用进程参与" 这条断言把他刚才（重启前）的活动算成了重启后的证据。
+    #     实测出现过一次：断言报「应用进程其实也起来了」，而那几行日志的时间戳其实
+    #     是重启之前的。两边都在这里收口，后面读到的一定是重启之后的世界。
+    shell(f"aa force-stop {BUNDLE}")
+    time.sleep(2)
+    vw.clear_logs()
     up = reboot_and_wait()
     ok = check(up > 0, f"模拟器已重启（开机时长={up:.0f}s，说明内核确实重新起了一次）",
                "重启后没能确认内核重启（开机时长没被清零）") and ok
@@ -539,7 +625,7 @@ def step8_degrade_honest():
     vw.clear_logs()
     shell(f"aa force-stop {BUNDLE}")
     time.sleep(3)
-    shell(f"aa start -a {ABILITY} -b {BUNDLE}")
+    shell(f"aa start -a {ABILITY} -b {BUNDLE} --pi lh_autologin 1")
     text, hit = wait_log(r"代理提醒自检：", timeout=60)
     ok = check(hit is not None, "应用启动后的那次同步触发了自检",
                "没等到自检日志（自检可能被前面的进程消耗掉了）")
@@ -556,11 +642,14 @@ def step8_degrade_honest():
                "日志里如实写了降级，没有假装排上",
                "日志里没有降级记录") and ok
 
-    goto_profile(wait=3)
+    goto_settings()
     ok = check(text_on_screen("系统级代理提醒不可用"),
                "UI 上明确写了降级，而不是假装已排上",
                "UI 上没有降级提示 —— 这是最危险的情况：用户以为会被提醒") and ok
     vw.shot("sentinel_panel.jpeg")
+    # 降级提示在哨兵面板里（设置页），顺手证明这一步确实是从设置页读到的
+    ok = check(text_on_screen("本地档案"), "降级提示是在设置页的哨兵面板里读到的",
+               "没读到设置页标志，可能没导航到位") and ok
     return ok
 
 
