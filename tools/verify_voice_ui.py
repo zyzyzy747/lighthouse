@@ -117,6 +117,7 @@ def main():
         return 2
 
     # ── ① 重装 + 载入演示数据（demo 的 note 是这次新加的，旧库没有）
+    # 「载入演示数据」已搬进设置页 —— 走 lh_load_demo 开关，别去界面上找按钮。
     print("\n-- ① 重装并载入演示数据 --")
     vw.shell(f"aa force-stop {BUNDLE}")
     time.sleep(1)
@@ -124,19 +125,9 @@ def main():
     time.sleep(2)
     hdc("install", HAP)
     time.sleep(2)
-    vw.shell(f"aa start -a EntryAbility -b {BUNDLE}")
-    time.sleep(8)
-
-    lay = vw.dump_layout("vu0")
-    if not vf.tap(lay, "我的"):
-        vw.check(False, "", "点不到「我的」Tab")
-        return 2
-    time.sleep(3)
-    if not tap_scrolling("载入演示数据"):
-        vw.check(False, "", "找不到「载入演示数据」按钮")
-        return 2
-    time.sleep(4)
-    print("  已载入演示数据")
+    vw.shell(f"aa start -a EntryAbility -b {BUNDLE} --pi lh_autologin 1 --pi lh_load_demo 1")
+    time.sleep(10)
+    print("  已载入演示数据（lh_load_demo 开关）")
 
     vf.tap(vw.dump_layout("vu1"), "快记")
     time.sleep(3)
