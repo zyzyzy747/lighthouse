@@ -44,7 +44,20 @@ function mapRow(rs: relationalStore.ResultSet): Application {
   };
 }
 
-function toBucket(app: Application, now: number, keepAppliedAt: boolean): relationalStore.ValuesBucket {
+/**
+ * 把 Application 转成入库的 ValuesBucket。
+ *
+ * ⚠ isInsert 的含义是「这次写入是不是新建一行」，它同时决定两个时间戳的取法：
+ *   - 新建：尊重调用方给的时间戳（导入/演示数据要能伪造"几天前投的"），
+ *           调用方没给（=0）才用 now 兜底。
+ *   - 更新：一律盖成 now，编辑过就说明有新动静。
+ *
+ * ⛔ 早先这里把 applied_at 和 updated_at 都硬写成 now，后果是
+ *   `staleApplied()`（按 updated_at < 截止时间 找"投出去 N 天没动静"）在
+ *   演示数据下永远查不出任何记录 —— 因为每条的 updated_at 都是刚装 App 的那一刻。
+ *   这个 bug 表面上只影响一张卡，实际是"库里的历史"被抹平成了"全是刚刚"。
+ */
+function toBucket(app: Application, now: number, isInsert: boolean): relationalStore.ValuesBucket {
   const bucket: relationalStore.ValuesBucket = {
     'company': app.company,
     'position': app.position,
@@ -54,15 +67,20 @@ function toBucket(app: Application, now: number, keepAppliedAt: boolean): relati
     'salary_min': app.salaryMin,
     'salary_max': app.salaryMax,
     'jd_text': app.jdText,
-    'applied_at': keepAppliedAt && app.appliedAt > 0 ? app.appliedAt : now,
-    'updated_at': now,
+    'applied_at': isInsert && app.appliedAt > 0 ? app.appliedAt : now,
+    'updated_at': isInsert && app.updatedAt > 0 ? app.updatedAt : now,
     'note': app.note
   };
   return bucket;
 }
 
 export class ApplicationRepo {
-  /** 新增一条投递，返回自增 id */
+  /**
+   * 新增一条投递，返回自增 id。
+   *
+   * isInsert=true ⇒ app.appliedAt / app.updatedAt 会被原样写进去，
+   * 演示数据与批量导入靠这个伪造"几天前投的、之后一直没动"。
+   */
   static async insert(app: Application): Promise<number> {
     const store: relationalStore.RdbStore = await DbHelper.get();
     const now: number = Date.now();
@@ -71,7 +89,7 @@ export class ApplicationRepo {
     return id;
   }
 
-  /** 全量更新。appliedAt 为 0 时不覆盖原值。 */
+  /** 全量更新。appliedAt 为 0 时不覆盖原值；updated_at 一律盖成 now（编辑过 = 有新动静）。 */
   static async update(app: Application): Promise<void> {
     const store: relationalStore.RdbStore = await DbHelper.get();
     const bucket: relationalStore.ValuesBucket = toBucket(app, Date.now(), false);
