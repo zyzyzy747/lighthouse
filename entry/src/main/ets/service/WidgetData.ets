@@ -1,5 +1,7 @@
 import { EventNode, getEventTypeMeta } from '../common/Types';
 import { EventRepo } from '../repository/EventRepo';
+import { KvRepo } from '../repository/KvRepo';
+import { K_UNLOCKED } from '../model/DbHelper';
 import { Log } from '../common/Logger';
 import { pad2 } from '../common/Utils';
 
@@ -65,17 +67,36 @@ export class WidgetData {
       return WidgetData.empty('等待第一个节点');
     }
 
+    const normalHead: string = past.length > 0
+      ? `${nodes.length} 个节点在等 · ${past.length} 个已逾期`
+      : `${nodes.length} 个节点在等`;
+
+    // ── 解锁态：决定卡片要不要脱敏 ─────────────────────────────────
+    // ★ 注意这里是"脱敏"，不是"不显示"。
+    //   卡片的价值恰恰在于**不打开应用就知道今天有没有事** —— 把它变成一片空白
+    //   等于把这个功能删了。所以时间、类型、数量全部保留，只藏掉"是哪家公司"。
+    //   锁只拦界面（见 service/Auth 类注释），卡片是**读得到数据的**，它只是被要求少说。
+    const unlocked: boolean = await WidgetData.isUnlocked();
+    // 脱敏前缀。
+    // ⚠ 必须同时加到 head 和 overdueText 上：卡片 UI 那行是
+    //   `overdue !== '0' ? overdueText : head` —— **有逾期节点时 head 根本不渲染**，
+    //   只加 head 的话，"未解锁"这个提示会在有逾期时凭空消失（实测踩到）。
+    const mask: string = unlocked ? '' : '未解锁 · ';
+
     const out: Record<string, string> = {
       'empty': '0',
+      'locked': unlocked ? '0' : '1',
       'total': `${nodes.length}`,
       'overdue': `${past.length}`,
-      'overdueText': past.length > 0 ? `${past.length} 个节点已逾期` : '',
-      'head': past.length > 0
-        ? `${nodes.length} 个节点在等 · ${past.length} 个已逾期`
-        : `${nodes.length} 个节点在等`,
+      'overdueText': past.length > 0 ? `${mask}${past.length} 个已逾期` : '',
+      'head': `${mask}${normalHead}`,
       'stamp': WidgetData.stamp(now),
 
-      'primeTitle': prime.title.length > 0 ? prime.title : '未命名节点',
+      // 未解锁时标题只留事件类型（「面试」而不带公司名）：
+      // 类型本身不敏感，而"今天有场面试"正是扫一眼卡片最想知道的。
+      'primeTitle': unlocked
+        ? (prime.title.length > 0 ? prime.title : '未命名节点')
+        : getEventTypeMeta(prime.type).label,
       'primeType': getEventTypeMeta(prime.type).label,
       'primeWhen': WidgetData.whenText(prime.happenAt, now),
       'primeBig': WidgetData.bigOf(prime.happenAt, now),
@@ -83,12 +104,31 @@ export class WidgetData {
       'primeLeft': WidgetData.leftText(prime.happenAt, now),
       'primeLevel': WidgetData.levelOf(prime.happenAt, now),
 
-      // 次要两行：主位之后的节点，最多两条
-      'sub1': WidgetData.subLine(future, 1, past, now),
-      'sub2': WidgetData.subLine(future, 2, past, now),
-      'more': future.length > 3 ? `还有 ${future.length - 3} 个` : ''
+      // 次要两行：主位之后的节点，最多两条。
+      // ⚠ 未解锁时**整行撤掉**，而不是打码成「腾讯」→「●●」——
+      //   打码看着像加载失败；而"还有几个"这个数量 head 里已经给过了，不缺信息。
+      'sub1': unlocked ? WidgetData.subLine(future, 1, past, now) : '',
+      'sub2': unlocked ? WidgetData.subLine(future, 2, past, now) : '',
+      'more': unlocked && future.length > 3 ? `还有 ${future.length - 3} 个` : ''
     };
     return out;
+  }
+
+  /**
+   * 应用是否处于已解锁状态。
+   *
+   * ⚠ 读不到就**按未解锁处理**：隐私功能的失败方向必须是"更保守"那一侧。
+   *   反过来写（读失败当作已解锁）会让一次数据库抖动就把公司名暴露在桌面上。
+   */
+  private static async isUnlocked(): Promise<boolean> {
+    try {
+      const v: string | undefined = await KvRepo.get(K_UNLOCKED);
+      return v === '1';
+    } catch (e) {
+      const err: Error = e as Error;
+      Log.w(`解锁态读取失败，按未解锁脱敏：${err.message}`);
+      return false;
+    }
   }
 
   /** 空态数据：卡片显示引导语，而不是一片空白 */
