@@ -62,17 +62,34 @@ def long_press(lay, text, exact=False, ms=900):
 
 
 def boot():
+    """冷启动到「有演示数据的主界面」。
+
+    ⚠ 两个改动（2026-09-22，全量回归时这套挂了）：
+
+    ① **必须自己带 `lh_load_demo`**。原来只 `aa start`，靠**上一套脚本留下的数据** ——
+       于是它过不过取决于"跑在它前面的是谁"，跟快记页本身没有任何关系。
+       而 `DemoData.load()` 是幂等的（库非空就 `demo data skipped`），
+       所以带上这个开关既能让它在空库上自足，又不会把已有的数据搞成两份。
+    ② 用 `ensure_main_ui` 等界面真的画出来，别赌固定 sleep。
+    """
     vw.shell(f"aa force-stop {BUNDLE}")
     time.sleep(1.5)
-    vw.shell(f"aa start -a EntryAbility -b {BUNDLE}")
-    time.sleep(7)
+    vw.shell(f"aa start -a EntryAbility -b {BUNDLE} --pi lh_autologin 1 --pi lh_load_demo 1")
+    vw.ensure_main_ui(timeout=40)
 
 
-def main():
-    print("=" * 62)
-    print("快记页改动验收")
-    print("=" * 62)
+# 演示数据里的全部 8 家公司（`DemoData.ets` 的 DEMO_APPS）。
+#
+# ⚠ 这里**必须列全**。原来只写了 4 家（金山办公/精测电子/光庭信息/达梦数据库），
+#   而列表是按紧急度排序的 —— 首屏排到的那几条正好落在这 4 家之外时，
+#   脚本会打出「列表里没找到已知公司名，跳过编辑验证」，
+#   看着像"快记页的数据没了"，其实是**判据自己的名单不全**。
+#   同一类坑在 verify_login 里也踩过一次：白名单比真实数据窄 ⇒ 假失败。
+DEMO_COMPANIES = ("精测电子", "光庭信息", "中望软件", "鼎捷软件",
+                  "用友网络", "金山办公", "达梦数据库", "明源云")
 
+
+def run_steps():
     boot()
     lay = vw.dump_layout("qr0")
     texts = vw.texts_of(lay)
@@ -118,12 +135,14 @@ def main():
     lay = vw.dump_layout("qr1")
     # 找一条记录卡片上的公司名（列表里的第一张卡片）
     first = None
-    for name in ["金山办公", "精测电子", "光庭信息", "达梦数据库"]:
+    for name in DEMO_COMPANIES:
         if rect(lay, name) is not None:
             first = name
             break
     if first is None:
-        print("  ✗ 列表里没找到已知公司名，跳过编辑验证")
+        vw.check(False, "",
+                 f"列表里一条演示公司都没找到（找的是 {len(DEMO_COMPANIES)} 家全名单）"
+                 " —— 要么演示数据没进来，要么列表没渲染")
         return
     print(f"  目标记录：{first}")
 
@@ -158,6 +177,24 @@ def main():
              "没有取消入口")
 
     print("\n完成。截图见 tools/_shots/qr_*.jpeg")
+
+
+def main():
+    print("=" * 62)
+    print("快记页改动验收")
+    print("=" * 62)
+
+    # ⚠ 收尾统计放在最外层：原来这套脚本**一条总数都不打**，
+    #   于是全量回归的汇总器只能把它判成"没跑到收尾"，
+    #   哪怕里面 4 条断言全过也一样。走到哪一步都要留下可解析的结论。
+    try:
+        run_steps()
+    finally:
+        ok = sum(1 for r in vw.RESULTS if r)
+        total = len(vw.RESULTS)
+        print("\n" + "=" * 62)
+        print(f"结果：{ok} 通过 / {total - ok} 失败")
+        print("=" * 62)
 
 
 if __name__ == "__main__":
