@@ -24,8 +24,10 @@ export const NAV_QUICK: string = 'quick';
 export const NAV_MAP: string = 'map';
 /** 面试复盘 */
 export const NAV_REVIEW: string = 'review';
+/** 端侧助手（提问 → 调工具 → 回答） */
+export const NAV_AGENT: string = 'agent';
 
-export const NAV_VALUES: string[] = [NAV_HOME, NAV_QUICK, NAV_MAP, NAV_REVIEW];
+export const NAV_VALUES: string[] = [NAV_HOME, NAV_QUICK, NAV_MAP, NAV_REVIEW, NAV_AGENT];
 
 export function pushNavTarget(target: string): void {
   if (target.length === 0) {
