@@ -1,40 +1,34 @@
 {
   "color": [
-    {
-      "name": "start_window_background",
-      "value": "#0A1120"
-    },
-    {
-      "name": "card_title",
-      "value": "#1B2436"
-    },
-    {
-      "name": "card_sub",
-      "value": "#55657E"
-    },
-    {
-      "name": "card_faint",
-      "value": "#8A99B0"
-    },
-    {
-      "name": "card_line",
-      "value": "#E2E8F2"
-    },
-    {
-      "name": "card_accent",
-      "value": "#2E7FE8"
-    },
-    {
-      "name": "card_warn",
-      "value": "#D98A00"
-    },
-    {
-      "name": "card_ok",
-      "value": "#1F9D68"
-    },
-    {
-      "name": "card_plus_bg",
-      "value": "#EAF1FD"
-    }
+    { "name": "start_window_background", "value": "#F2F5FA" },
+
+    { "name": "lh_bg", "value": "#F2F5FA" },
+    { "name": "lh_panel", "value": "#FFFFFF" },
+    { "name": "lh_panel_2", "value": "#EEF2F8" },
+    { "name": "lh_line", "value": "#DFE6F0" },
+    { "name": "lh_primary", "value": "#1F6FEB" },
+    { "name": "lh_accent", "value": "#B26A00" },
+    { "name": "lh_ok", "value": "#14855C" },
+    { "name": "lh_danger", "value": "#D93A3A" },
+    { "name": "lh_purple", "value": "#7C5CD6" },
+    { "name": "lh_tx", "value": "#16202F" },
+    { "name": "lh_tx_2", "value": "#57667F" },
+    { "name": "lh_tx_3", "value": "#8794A8" },
+
+    { "name": "lh_tint_primary", "value": "#1A1F6FEB" },
+    { "name": "lh_tint_accent", "value": "#1AB26A00" },
+    { "name": "lh_tint_ok", "value": "#1A14855C" },
+    { "name": "lh_tint_danger", "value": "#1AD93A3A" },
+    { "name": "lh_tint_purple", "value": "#1A7C5CD6" },
+    { "name": "lh_tint_neutral", "value": "#1A57667F" },
+
+    { "name": "card_title", "value": "#1B2436" },
+    { "name": "card_sub", "value": "#55657E" },
+    { "name": "card_faint", "value": "#8A99B0" },
+    { "name": "card_line", "value": "#E2E8F2" },
+    { "name": "card_accent", "value": "#2E7FE8" },
+    { "name": "card_warn", "value": "#D98A00" },
+    { "name": "card_ok", "value": "#1F9D68" },
+    { "name": "card_plus_bg", "value": "#EAF1FD" }
   ]
 }
