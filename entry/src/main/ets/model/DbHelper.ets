@@ -7,8 +7,11 @@ import { Log } from '../common/Logger';
  * ⚠ 改这里的任何一列，必须同时：① 升 DB_VERSION ② 在 DbHelper.migrate 里写对应 ALTER。
  */
 export const DB_NAME: string = 'lighthouse.db';
-/** ⚠ v2：加 app_kv —— 哨兵配置与去重记录要从 Preferences 挪进库，因为卡片进程也要读它 */
-export const DB_VERSION: number = 2;
+/**
+ * ⚠ v2：加 app_kv —— 哨兵配置与去重记录要从 Preferences 挪进库，因为卡片进程也要读它。
+ * ⚠ v3：加 account —— 本地档案（用户名 + 盐 + 派生密钥）。
+ */
+export const DB_VERSION: number = 3;
 
 export const T_APP: string = 'application';
 export const T_EVENT: string = 'event_node';
@@ -23,6 +26,32 @@ export const T_REVIEW: string = 'review';
  * 卡片本来就在读这个库，把配置放进来是顺路的事。
  */
 export const T_KV: string = 'app_kv';
+
+/**
+ * 本地档案表。
+ *
+ * 为什么值得单独一张表（而不是塞进 app_kv）：
+ *   ① 它是有结构的行数据（用户名 / 盐 / 派生密钥 / 迭代轮数），不是配置项；
+ *   ② **密码永远不落明文**，落的是 PBKDF2 派生密钥 + 每账户独立的随机盐。
+ *      将来要换算法或提轮数时，`rounds` 一列能让旧记录继续可校验（见 Auth.login），
+ *      不会把老用户锁在门外。
+ *
+ * ⚠ 这张表**不参与 DbHelper.wipe()**：wipe 是"清业务数据"的调试口，
+ *   把档案一起清掉的话，每清一次数据都要重建账号，验收脚本没法用。
+ *   （要连档案一起重置走 Auth.resetAll —— 那里是刻意两者都清的。）
+ */
+export const T_ACCOUNT: string = 'account';
+
+/**
+ * 会话解锁标记（app_kv 的键）。
+ *
+ * 为什么放在这里而不是 service/Auth：
+ *   **卡片进程要读它**（未解锁 → 卡片脱敏）。而卡片只需要一个字符串常量，
+ *   没必要为了它把整个 CryptoArchitectureKit 拖进卡片进程的依赖图。
+ */
+export const K_UNLOCKED: string = 'auth_unlocked';
+/** 当前档案的称呼。卡片脱敏后仍需要它来回答"这是谁的卡片"。 */
+export const K_USER: string = 'auth_user';
 
 export const DDL_CREATE: string[] = [
   `CREATE TABLE IF NOT EXISTS ${T_APP} (
@@ -61,6 +90,15 @@ export const DDL_CREATE: string[] = [
   `CREATE TABLE IF NOT EXISTS ${T_KV} (
     k TEXT PRIMARY KEY,
     v TEXT NOT NULL DEFAULT ''
+  )`,
+  `CREATE TABLE IF NOT EXISTS ${T_ACCOUNT} (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL DEFAULT '',
+    salt TEXT NOT NULL DEFAULT '',
+    hash TEXT NOT NULL DEFAULT '',
+    rounds INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL DEFAULT 0,
+    last_login_at INTEGER NOT NULL DEFAULT 0
   )`,
   `CREATE INDEX IF NOT EXISTS idx_app_status ON ${T_APP} (status)`,
   `CREATE INDEX IF NOT EXISTS idx_app_applied ON ${T_APP} (applied_at)`,
@@ -121,6 +159,7 @@ export class DbHelper {
     Log.i(`migrate db from v${fromVersion} to v${DB_VERSION}`);
     // v0 -> v1 是首次建库，DDL_CREATE 已用 IF NOT EXISTS 兜住，无需额外动作。
     // v1 -> v2 加 app_kv 表：同样是纯新建表，IF NOT EXISTS 已覆盖，不需要 ALTER。
+    // v2 -> v3 加 account 表：同上，纯新建表。
     // ⚠ 以后加**列**就必须在这里按 fromVersion 分支写 ALTER TABLE —— IF NOT EXISTS 只管建表。
   }
 
