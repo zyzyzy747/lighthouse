@@ -147,17 +147,26 @@ def rotate_until(pred, want, max_tries=4):
     return pred()
 
 
-def tap_text(text, exact=True, wait=3.0):
-    hit = vw.find_text_node(vw.dump_layout("mb_tap"), text, exact=exact)
-    if not hit:
-        return False
-    vw.tap(hit[0], hit[1], wait=wait)
-    return True
+def tap_text(text, exact=True, wait=3.0, tries=3):
+    """在当前界面点某段文字（自带重试）。
+
+    ⚠ 重试是**必需**的，不是保险：`dump_layout` 拉不到控件树时会**明确返回 None**
+      （见其文档），单次调用碰上一次拉取失败就报「点不到 X」——
+      而那句话会被读成"这个控件不存在"，把排错方向引到文字匹配上去。
+      实测：同一台设备上手工 dump 明明能命中，脚本却报"点不到「复盘」Tab"。
+    """
+    for _ in range(tries):
+        hit = vw.find_text_node(vw.dump_layout("mb_tap"), text, exact=exact)
+        if hit:
+            vw.tap(hit[0], hit[1], wait=wait)
+            return True
+        time.sleep(1.0)
+    return False
 
 
 def start_app(*ps_pairs):
     """带可选 want 参数拉起应用。ps_pairs 形如 ('lh_bp_two', '380')"""
-    cmd = f"aa start -a {ABILITY} -b {BUNDLE}"
+    cmd = f"aa start -a {ABILITY} -b {BUNDLE} --pi lh_autologin 1"
     for k, v in ps_pairs:
         cmd += f" --ps {k} {v}"
     vw.shell(cmd)
@@ -209,14 +218,30 @@ def step1_resources():
     ok = check((w, h) == (1024, 1024), f"前景层尺寸 {w}×{h} 符合分层图标规范",
                f"前景层尺寸 {w}×{h}，应为 1024×1024") and ok
 
-    # 启动页底色：浅色主题下也必须是深海色，否则从白底闪进深色应用
-    cj = os.path.join(PROJECT, r"entry\src\main\resources\base\element\color.json")
+    # 启动页底色：必须**与该主题自己的应用底色一致**，否则从启动页切进应用会闪一下。
+    #
+    # ⚠ 判据写的是 `== lh_bg`（同文件比对），不是某个写死的色值。
+    #   原来写死 `== "#0A1120"`（深色底）—— 那是在应用只有深色主题时定的。
+    #   后来补了浅色主题（base: lh_bg=#F2F5FA / dark: lh_bg=#0A1120），
+    #   浅色那套就被判成"会闪一下白"，而它其实**完全正确**（浅色下本来就该是浅底）。
+    #   ★ 判据要对着"不变量"写：要的是两处颜色**一致**，不是等于某个具体值。
+    #     两套资源都查一遍，以后再加主题也不用改这里。
     import json
-    with open(cj, encoding="utf-8") as f:
-        colors = {c["name"]: c["value"] for c in json.load(f)["color"]}
-    ok = check(colors.get("start_window_background", "").upper() == "#0A1120",
-               "启动页底色 = #0A1120（与应用底色一致，不会白闪）",
-               f"启动页底色是 {colors.get('start_window_background')}，会闪一下白") and ok
+    bad_themes = []
+    for theme in ("base", "dark"):
+        cj = os.path.join(PROJECT, "entry", "src", "main", "resources",
+                          theme, "element", "color.json")
+        if not os.path.isfile(cj):
+            continue
+        with open(cj, encoding="utf-8") as f:
+            colors = {c["name"]: (c["value"] or "").upper() for c in json.load(f)["color"]}
+        splash = colors.get("start_window_background", "")
+        bg = colors.get("lh_bg", "")
+        if splash != bg:
+            bad_themes.append(f"{theme}: 启动页 {splash or '未定义'} ≠ 应用底色 {bg}")
+    ok = check(not bad_themes,
+               "启动页底色 = 该主题的应用底色（深浅两套都比对过，不会闪）",
+               "启动页底色和应用底色对不上，切进应用会闪一下 —— " + "；".join(bad_themes)) and ok
 
     # 跟随旋转：不声明的话平板/折叠屏上转过来界面不动
     mj = os.path.join(PROJECT, r"entry\src\main\module.json5")
@@ -323,22 +348,99 @@ def step3_landscape_side():
     return ok
 
 
+def back_from_subpage():
+    """从二级页（设置）退回主壳。点在「‹」上，不用 Back 键。
+
+    ⛔ 别用 `uitest uiInput keyEvent Back` 代替：应用里没有可退的返回栈时，
+       它会把应用**整个扔到后台**（和 SKILL 12.16 记的是同一个现象），
+       后果一样是"下一步找不到 Tab"，但更难查 —— 因为提示完全一样。
+    """
+    if tap_text("‹", exact=True, wait=2.0):
+        time.sleep(2)
+        return True
+    return False
+
+
+def enter_tab_shell():
+    """确保现在站在「有底部 Tab 的主壳」上；钻进了二级页就先退出来。
+
+    ⚠⚠ 为什么要它（2026-09-22 实测，代价一轮验收）：
+      底部 Tab 栏**只在主壳渲染**，设置页是二级页、不占 Tab。
+      而 step4 里「我的」这一页的判据要**先钻进设置页**（「演示数据」卡片在宽屏右列），
+      跑完不退出的话，**下一轮**点 Tab 必然落空 —— 报出来是「点不到「复盘」Tab」。
+      实测那次的结果很有误导性：地图 ✓、快记 ✓、我的 ✓，然后复盘 ✗，
+      看起来像"复盘这一个 Tab 有问题"，实际是"我们还站在设置页里"。
+      ⇒ **任何会钻进二级页的步骤，都要负责把状态收回主壳**，
+        而且最好收在**下一轮的入口**上（自愈），而不是依赖上一轮记得退。
+    """
+    for _ in range(4):
+        if sum(1 for t in vw.texts_of(vw.dump_layout("shell")) if t in TABS) >= 3:
+            return True
+        if not back_from_subpage():
+            break
+    return sum(1 for t in vw.texts_of(vw.dump_layout("shell")) if t in TABS) >= 3
+
+
 PAGES = [
-    # (Tab, 判据文案候选, 至少出现几次, 说明)
+    # (Tab, 进入后再点的路径, 判据文案候选, 至少出现几次, 说明, 命中必须在右半边)
     # 复盘页的右栏会**自动选中最近一场**，所以不能再拿「从左侧选一场面试」当判据 ——
-    # 那句只在"没选中"时才出现。改成断言 radarBlock 真的渲染了：
-    # 它三个分支（分析中 / 无雷达 / 有雷达）各有一句独有文案，命中任一即证明右栏成立。
-    ("地图", ["作战地图"], 2, "地图页：左「投得怎么样」右「接下来做什么」"),
-    ("复盘", ["还没有能力雷达", "六维明细", "正在读这场面试"], 1, "复盘页：右栏自动选中最近一场并展开雷达区"),
-    ("快记", ["左边填 · 右边立刻出现"], 1, "快记页：左表单右列表"),
-    ("我的", ["演示数据"], 1, "我的页：右列「演示数据 / AI 引擎」并排出现"),
+    # 那句只在"没选中"时才出现。
+    ("地图", ["作战地图"], 2, "地图页：左「投得怎么样」右「接下来做什么」", [], False),
+    ("快记", ["左边填 · 右边立刻出现"], 1, "快记页：左表单右列表", [], False),
+    # ⚠ 「演示数据」**不在「我的」页上**，它是 `SettingsView.colRight()` 里的卡片 ——
+    #   也就是**设置页的宽屏右列**。原来这一步直接点「我的」就找「演示数据」，
+    #   于是永远 0 命中，报成"双栏没生效"，把排错方向引到断点/旋转上去了。
+    #   （2026-09-22：「载入演示数据」从「我的」搬到设置页之后，这条判据没跟着改。）
+    #   它恰好只在宽屏右列渲染 ⇒ 用它判双栏是合适的，只是要多点一层。
+    #   ⚠ 横屏下这个入口在**屏幕外**（dumpLayout 只给可见节点），所以先滚动。
+    ("我的", ["演示数据"], 1, "设置页：宽屏右列出现「演示数据」卡片（双栏真的生效）",
+     ["设置"], False),
+    # ⚠ 复盘用**包含**匹配 + **必须落在右半边**，见 right_half_hit 的说明。
+    ("复盘", ["能力雷达", "六维明细", "正在读这场面试", "云端模型", "本地引擎"], 1,
+     "复盘页：右栏渲染出雷达区（已分析 / 未分析两种状态都算）", [], True),
 ]
 
+# 哪些页用「包含」匹配（其余用严格相等，避免"顺手多匹配几个字"造成假通过）
+CONTAINS_PAGES = {"复盘"}
 
-def _counts(lay, markers):
-    """一份控件树里，各候选文案各出现几次（只 dump 一次，别每个候选各 dump 一遍）"""
+
+def _counts(lay, markers, contains=False):
+    """一份控件树里，各候选文案各出现几次（只 dump 一次，别每个候选各 dump 一遍）
+
+    ⚠ 默认**严格相等**。改成"包含"会让「作战地图」这种判据把标题里的
+      「作战地图 · 今天」也算进来 —— 一个本来要证明"左右各一栏"的断言，
+      会因为顺带多匹配了几处而假通过。
+    """
     texts = vw.texts_of(lay)
+    if contains:
+        return {m: sum(1 for t in texts if m in t) for m in markers}
     return {m: sum(1 for t in texts if t == m) for m in markers}
+
+
+def right_half_hit(lay, markers):
+    """右半边里有没有出现这些文案（包含匹配）；返回命中的文字或 None。
+
+    ★ 为什么不能只数出现次数：「能力雷达」这个词在**左栏**的空态说明里也有
+      （ReviewView 的「分析引擎会据此算出六维能力雷达」），
+      光数次数的话，右栏整个没渲染也能凑够 1 次 —— 又是一个"看起来合理的假通过"。
+      所以要求命中节点**中心落在屏幕右半边**。
+    ★ 为什么用包含而不是相等：右栏那行来源标注带动态数据
+      （「云端模型 deepseek-flash · 用时 3.4s · 1383 tokens」），写死整串必然对不上；
+      而雷达图本身是 Canvas，轴标签根本不在控件树里。
+    """
+    b = vw._bounds_of(lay)
+    if not b:
+        return None
+    mid = (b[0] + b[2]) / 2
+    for n in vw.walk_nodes(lay):
+        a = n.get("attributes", {})
+        t = (a.get("text") or "").strip()
+        if not t or not any(m in t for m in markers):
+            continue
+        nb = vw._bounds_of(n)
+        if nb and (nb[0] + nb[2]) / 2 > mid:
+            return t
+    return None
 
 
 def step4_two_pane():
@@ -368,21 +470,39 @@ def step4_two_pane():
         if "多端：窗口" in line:
             print("  " + line.strip()[-110:])
 
-    for tab, markers, need, desc in PAGES:
+    for tab, markers, need, desc, via, right_half in PAGES:
+        # ⚠ 上一轮可能钻进了二级页（例如「我的」的判据要进设置页），先退回主壳再点 Tab
+        if not enter_tab_shell():
+            ok = check(False, "", f"退不回主壳（底部 Tab 不在），点不到「{tab}」") and ok
+            continue
         if not tap_text(tab):
             ok = check(False, "", f"点不到「{tab}」Tab") and ok
             continue
         time.sleep(4)
-        cs = _counts(vw.dump_layout("mb_pane"), markers)
-        n = max(cs.values())
-        hit = max(cs, key=lambda k: cs[k])
-        if need >= 2:
-            ok = check(n >= 2, f"{desc}（「{hit}」出现 {n} 次 = 左右各一栏）",
-                       f"{desc}：只找到 {n} 次「{hit}」，看起来还是单列") and ok
+        for step_text in via:          # 有的判据在下一层页面里（见 PAGES 的说明）
+            # ⚠ 横屏下入口可能在屏幕外（见 tap_text_with_scroll 的说明）：找不到就滚一屏再找
+            if not vw.tap_text_with_scroll(step_text, exact=True, rounds=3, tries=4):
+                ok = check(False, "", f"点不到「{tab}」→「{step_text}」（滚动后也没找到）") and ok
+                break
+            time.sleep(3)
         else:
-            ok = check(n >= 1, f"{desc}（出现「{hit}」）",
-                       f"{desc}：{'/'.join(markers)} 一个都没出现，双栏没生效") and ok
-        vw.shot(f"md_3_twopane_{tab}.jpeg")
+            lay = vw.dump_layout("mb_pane")
+            if right_half:
+                hit_text = right_half_hit(lay, markers)
+                ok = check(hit_text is not None,
+                           f"{desc}（右栏命中「{hit_text}」）",
+                           f"{desc}：右半边没有 {'/'.join(markers)} 任何一种文案") and ok
+            else:
+                cs = _counts(lay, markers, contains=tab in CONTAINS_PAGES)
+                n = max(cs.values())
+                hit = max(cs, key=lambda k: cs[k])
+                if need >= 2:
+                    ok = check(n >= 2, f"{desc}（「{hit}」出现 {n} 次 = 左右各一栏）",
+                               f"{desc}：只找到 {n} 次「{hit}」，看起来还是单列") and ok
+                else:
+                    ok = check(n >= 1, f"{desc}（出现「{hit}」）",
+                               f"{desc}：{'/'.join(markers)} 一个都没出现，双栏没生效") and ok
+            vw.shot(f"md_3_twopane_{tab}.jpeg")
     return ok
 
 
@@ -441,20 +561,39 @@ def step5_hover():
 
 def step6_desktop_icon():
     print("\n== 6/6 桌面图标已经是灯塔 ==")
+    # ⚠⚠ 转回竖屏必须**趁应用在前台**做（2026-09-22 修）。
+    #   文件头说明①：应用不在前台时 rotate 会被**桌面直接丢掉**、还不报错。
+    #   而上一轮的"折叠屏悬停"是靠 rotate 到横屏实现的 ⇒ 这一步开始时**必定是横屏**。
+    #   原先的写法是先 `aa force-stop` 再 rotate：应用已经不在前台 ⇒ 转不动 ⇒
+    #   设备停在横屏，横屏桌面的排布和竖屏不一样，`goto_card_page` 就找不到卡片了。
+    #   于是 step6 挂在一个和"换图标"毫无关系的地方（而且它其实是崩在下面那行文案上，
+    #   见下方 ⚠）。先把应用拉起来（幂等），转正了再杀掉。
+    vw.shell(f"aa start -a EntryAbility -b {BUNDLE}")
+    time.sleep(5)
+    rotate_until(lambda: not is_landscape(), "竖屏", max_tries=4)
     vw.shell(f"aa force-stop {BUNDLE}")
     time.sleep(2)
-    # ⚠ 旋转会让桌面重新排布，可能停在别的页 —— 先转回竖屏再找卡片页。
-    #   注意此时应用已被杀掉，前台是桌面；桌面是竖屏锁定的，所以这一步通常在
-    #   上一轮结束时就已经是竖屏了，rotate_until 会直接返回。
-    rotate_until(lambda: not is_landscape(), "竖屏", max_tries=3)
+    # ⚠ 卡片会在 `bm uninstall` 时被系统一起删掉 —— 而本套的入口（install）就是重装。
+    #   所以这里必须先确认桌面真有卡片，没有就补一张，否则下面 `goto_card_page`
+    #   拿不到 FormComponent，第 6 步会红成一个跟"换图标"毫无关系的失败。
+    if not vw.ensure_card(BUNDLE):
+        print("    ⚠ 没能把卡片加到桌面")
     # 复用 verify_widget 里已经踩完坑的「回到卡片所在页」：
     # HOME 要按两下才回主屏，且卡片可能不在第一页，要左右滑动去找。
     lay, form = vw.goto_card_page()
     vw.shot("md_5_desktop.jpeg")
     ok = check(True, "桌面截图已保存 md_5_desktop.jpeg（人工确认图标是灯塔）", "")
     # 顺便确认桌面上的卡片还在（换图标不该影响卡片）
+    #
+    # ⚠ 文案必须**惰性**构造。原来写成
+    #     check(form is not None, f"…{form[2] - form[0]}×…", "桌面上找不到卡片了")
+    #   —— f-string 是**先求值**的：form 为 None 时直接 `TypeError: 'NoneType'
+    #   object is not subscriptable`，脚本崩在最后一步。
+    #   后果不只是难看：**那行本该打出来的「桌面上找不到卡片了」永远看不到**，
+    #   报错方向从"卡片没了"变成了"脚本有 bug"。判据和它的文案要一起想。
     ok = check(form is not None,
-               f"桌面卡片仍在（{form[2] - form[0]}×{form[3] - form[1]}px，换图标没有连带影响）",
+               (f"桌面卡片仍在（{form[2] - form[0]}×{form[3] - form[1]}px，换图标没有连带影响）"
+                if form else ""),
                "桌面上找不到卡片了") and ok
     return ok
 
