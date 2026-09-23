@@ -28,6 +28,19 @@ import verify_filter as vf  # noqa: E402
 
 BUNDLE = "com.wuit.lighthouse"
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def finish(code, why):
+    """打一条**可解析**的收尾，再返回退出码。
+
+    ⚠ 原来四个分支只 `return 0/1`，一条总数都不打 —— 汇总器只好把它报成
+      「没跑到收尾」，跟"脚本崩了"分不开。这句连同 `why` 一起打出来，
+      人工一眼能分清「环境没采到声音」和「采到了却识别不出」（后者才是真 bug）。
+    """
+    ok_n, ng_n = (1, 0) if code == 0 else (0, 1)
+    print(f"\n结果：{ok_n} 通过 / {ng_n} 失败")
+    print(f"  {why}")
+    return code
 WAV = os.path.join(HERE, "_shots", "voice_clip.wav")
 
 # 与 make_voice_clip.py 的 PHRASE 一致
@@ -78,7 +91,7 @@ def main():
     time.sleep(3)
 
     # ① 回到快记页最上面
-    vw.shell(f"aa start -a EntryAbility -b {BUNDLE}")
+    vw.shell(f"aa start -a EntryAbility -b {BUNDLE} --pi lh_autologin 1")
     time.sleep(6)
     vf.scroll_to_top()
     if not vf.tap(vw.dump_layout("vl0"), "快记"):
@@ -148,20 +161,20 @@ def main():
     if len(hit) >= 2:
         print("  ✓ 真麦克风 → 识别 → 写进备注框，整条路通了")
         print("    （截图 vl_1_live.jpeg 里备注框应该就是刚才那句话的转写）")
-        return 0
+        return finish(0, "真麦克风链已通")
     if peak < 500:
         print("  ⚠ 这次**基本没采到声音**（峰值接近底噪）⇒ 是环境问题，不是功能问题：")
         print("     · 系统音量太小 / 静音")
         print("     · 戴着耳机 —— 声音根本到不了麦克风")
         print("     · 模拟器的音频可能被系统回声消除（AEC）当成回声抹掉了")
         print("    调高音量、拔掉耳机再来一次。")
-        return 1
+        return finish(1, "环境：没采到声音（需要人对着麦克风说话）")
     if len(hit) == 1:
         print("  ~ 采到声音了但只命中一个词，识别质量一般（音量偏低或环境噪声）。")
         print("    功能本身是通的 —— verify_voice.py 已证明引擎与喂音频管线没问题。")
-        return 0
+        return finish(0, "采到声音但只命中一个词（识别质量一般）")
     print("  ✗ 采到声音了（峰值足够）却没出字 —— 这个值得查，把日志留下来。")
-    return 1
+    return finish(1, "采到声音却没出字（真问题）")
 
 
 if __name__ == "__main__":
