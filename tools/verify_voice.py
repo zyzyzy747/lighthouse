@@ -89,12 +89,24 @@ def main():
     vw.shell("hilog -r")
     vw.shell(f"aa force-stop {BUNDLE}")
     time.sleep(2)
-    vw.shell(f"aa start -a {ABILITY} -b {BUNDLE} --ps lh_voice_dict 1")
-    # 时间预算：4s 启动延迟 + 6s 音频按真实节奏喂 + 尾部等最终结果（引擎是流式的，
-    # finish 之后还在算积压，模拟器上要好几秒）。给足 34 秒，宁可多等也别在
-    # 结果到达之前就收网 —— 第一版就是等太短，拿到了半句"明天下"。
-    print("  等 34 秒（4s 启动延迟 + 6s 音频 + 等最终结果）…")
-    time.sleep(34)
+    vw.shell(f"aa start -a {ABILITY} -b {BUNDLE} --pi lh_autologin 1 --ps lh_voice_dict 1")
+    # ⚠ 原来写死 `sleep(34)`。13 套验收连着跑时模拟器负载高、ASR 收尾明显变慢，
+    #   34 秒会在**最终结果到达之前**就收网 ⇒ 假红（实测 2026-09-22：汇总之后
+    #   才打出 `isFinal=true "明天下午2点面试…"`，字其实识对了）。
+    #   改成**轮询**「自检汇总」那行日志：出现即收网，正常情况比写死更快；
+    #   等满 120 秒还没有才认超时。应用侧同时把预算提到 45 秒，两边一起放宽。
+    print("  等「语音自检汇总」那行日志（最多 120 秒，出现即继续）…")
+    deadline = time.time() + 120
+    got_summary = False
+    while time.time() < deadline:
+        probe = vw.shell("hilog -x 2>/dev/null | grep '语音自检汇总' | tail -3")
+        if "语音自检汇总" in probe:
+            got_summary = True
+            print("    ✓ 自检汇总已出现，收网")
+            break
+        time.sleep(3)
+    if not got_summary:
+        print("    ⚠ 120 秒内没等到自检汇总 —— 按实际拿到的日志判定（下面会看到差在哪一步）")
 
     raw = vw.shell("hilog -x 2>/dev/null | grep -E '语音自检' | tail -80")
     lines = [l.split("Lighthouse", 1)[-1].lstrip(": ") if "Lighthouse" in l else l
@@ -181,9 +193,16 @@ def main():
           f"识别结果和台词对不上（期望含 {EXPECT_WORDS}，实际「{text}」）")
 
     # ⑥ 结论行
-    check(has("语音自检结论：PASS"),
-          "自检结论 PASS",
-          "自检结论不是 PASS（详见上面的日志）")
+    # ⚠ 超时和"识别错"要分开报：TIMEOUT 只说明这台模拟器当时太慢，
+    #   跑出来的字往往是对的，让人去查音频/麦克风是南辕北辙。
+    if has("语音自检结论：TIMEOUT"):
+        check(False,
+              "自检结论 PASS",
+              "自检结论 TIMEOUT —— 只是没等到最终结果，**不是识别失败**，重跑一次再看")
+    else:
+        check(has("语音自检结论：PASS"),
+              "自检结论 PASS",
+              "自检结论不是 PASS（详见上面的日志）")
 
     ok = sum(1 for r in vw.RESULTS if r)
     bad = len(vw.RESULTS) - ok
