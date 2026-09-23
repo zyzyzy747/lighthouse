@@ -105,7 +105,12 @@ export default class EntryFormAbility extends FormExtensionAbility {
       const data: Record<string, string> = await WidgetData.build();
       const payload: formBindingData.FormBindingData = formBindingData.createFormBindingData(data);
       await formProvider.updateForm(formId, payload);
-      Log.i(`卡片已刷新 formId=${formId} 主位=${data['primeTitle']} ${data['primeWhen']} 共${data['total']}个节点`);
+      // ⚠ 新增字段一律**追加在末尾**：验收脚本用 `主位=(.+?) 共\d+个节点` 取主位，
+      //   在中间插字段会把后面那段一起并进主位里，脚本会"通过"但取到垃圾值。
+      // `提示` = data['head']（那行「N 个节点在等 / 未解锁 · N 个节点在等」）。
+      //   加它是为了验证脱敏**真的到了卡片上**：只藏公司名、却看不出这张卡在锁着，
+      //   用户就不知道该去解锁看详情 —— 那是把功能做残，不是做安全。
+      Log.i(`卡片已刷新 formId=${formId} 锁=${data['locked']} 主位=${data['primeTitle']} ${data['primeWhen']} 共${data['total']}个节点 提示=${data['head']}`);
     } catch (e) {
       const err = e as BusinessError;
       Log.e(`卡片刷新失败 formId=${formId} code=${err.code} msg=${err.message}`);
