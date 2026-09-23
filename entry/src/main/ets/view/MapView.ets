@@ -1,4 +1,5 @@
 import { Palette, Metrics } from '../common/Theme';
+import { JobMapCard } from './JobMapCard';
 import { ApplicationRepo, FunnelStat, StatusCount } from '../repository/ApplicationRepo';
 import { EventRepo } from '../repository/EventRepo';
 import { STATUS_LIST, EventNode, getStatusMeta, getEventTypeMeta } from '../common/Types';
@@ -218,6 +219,19 @@ export struct MapView {
     }
   }
 
+  /**
+   * 真实求职地图。
+   *
+   * 放在漏斗**上面**而不是下面：用户进这一页先想知道的是「接下来往哪跑」，
+   * 转化率是要静下来看的数字。放在下面要滚两屏才见得到地图，等于没有。
+   */
+  @Builder
+  mapCardItem() {
+    ListItem() {
+      JobMapCard({ tick: this.tick })
+    }
+  }
+
   @Builder
   overviewItem() {
     ListItem() {
@@ -354,6 +368,7 @@ export struct MapView {
           if (this.funnel.total === 0) {
             this.emptyItem()
           } else {
+            this.mapCardItem()
             this.overviewItem()
             this.barsItem()
           }
@@ -391,6 +406,7 @@ export struct MapView {
         if (this.funnel.total === 0) {
           this.emptyItem()
         } else {
+          this.mapCardItem()
           this.overviewItem()
           this.barsItem()
           this.pendingItems()
