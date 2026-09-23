@@ -2,7 +2,7 @@ import { common } from '@kit.AbilityKit';
 import { Palette, Metrics } from '../common/Theme';
 import { DbHelper } from '../model/DbHelper';
 import { Log } from '../common/Logger';
-import { NAV_KEY, NAV_QUICK, NAV_MAP, NAV_REVIEW, NAV_HOME } from '../common/Nav';
+import { NAV_KEY, NAV_QUICK, NAV_MAP, NAV_REVIEW, NAV_HOME, NAV_AGENT } from '../common/Nav';
 import { WidgetRefresher } from '../service/WidgetRefresher';
 import { WidgetData } from '../service/WidgetData';
 import { Sentinel, SentinelReport } from '../service/Sentinel';
@@ -11,6 +11,10 @@ import { QuickRecordView } from '../view/QuickRecordView';
 import { MapView } from '../view/MapView';
 import { ReviewView } from '../view/ReviewView';
 import { ProfileView } from '../view/ProfileView';
+import { AssistantView } from '../view/AssistantView';
+import { SettingsView } from '../view/SettingsView';
+import { LoginView } from '../view/LoginView';
+import { Auth } from '../service/Auth';
 
 /**
  * 灯塔主框架。
@@ -32,6 +36,17 @@ struct Index {
   /** 数据版本号：任何页面改了数据就 +1，其余页面收到后自动重载。 */
   @State tick: number = 0;
   @State ready: boolean = false;
+  /** 是否停在设置页。设置是二级页：从「我的」进去、左上角返回，不占底部 Tab。 */
+  @State inSettings: boolean = false;
+  /**
+   * 是否已通过本地档案解锁。
+   *
+   * ⚠ 这把锁只挂在**界面层**：卡片进程走
+   *   `EntryFormAbility → WidgetData → EventRepo`，完全不经过这里。
+   *   一旦有人把门挂到数据层（未解锁就读不到数据），卡片在未解锁时就直接废掉 ——
+   *   而十套验收脚本全跑在已解锁态，那种错误永远不会被发现（详见 service/Auth 类注释）。
+   */
+  @State unlocked: boolean = false;
 
   /**
    * 启动页最短停留时长。
@@ -52,6 +67,12 @@ struct Index {
    *   字面量要和 common/Nav 里的 NAV_KEY 保持一致。
    */
   @StorageLink('lhNavTarget') @Watch('onNavTarget') navTarget: string = '';
+  /**
+   * 后台写库完成信号（目前只有 lh_load_demo 自检载入会发）。
+   * ⚠ @Watch 只在「值变化」时触发 —— 若信号在 UI 建立之前就写进 AppStorage，
+   *   这里拿到的是初值、不会响。所以 aboutToAppear 里还要补一次消费（见 boot 前）。
+   */
+  @StorageProp('lhDataBump') @Watch('onDataBump') dataBump: number = 0;
 
   // ── 多端布局开关（同样必须写字面量，见 common/Layout 顶部说明）
   @StorageProp('lhSideNav') sideNav: boolean = false;
@@ -81,6 +102,17 @@ struct Index {
     //   @Watch 只在「值发生变化」时触发，初值就存在的情况它接不住 ——
     //   漏了这一句，点卡片的「＋」会停在默认页，功能只在热启动时看着正常。
     this.consumeNav(false);
+    // 同理消费后台写库信号：带参启动（lh_load_demo）时数据通常晚于 UI 就绪，
+    // 走 @Watch；万一建库快于 UI（首启库已存在时很可能），信号早就躺在 AppStorage 里，
+    // 这里补一次 bump 才不会出现"库里有数据、列表是空的"。
+    if (this.dataBump > 0) {
+      this.bump();
+    }
+  }
+
+  /** 后台写库完成 → 各页重载。 */
+  onDataBump(): void {
+    this.bump();
   }
 
   aboutToDisappear(): void {
@@ -100,6 +132,9 @@ struct Index {
     }
     if (target === NAV_HOME) {
       return 1;
+    }
+    if (target === NAV_AGENT) {
+      return 3;
     }
     return -1;
   }
@@ -138,6 +173,19 @@ struct Index {
       // 数据库起不来也照样放行（见 enterMain 注释），否则用户看到的是永远转圈的启动页
       const err: Error = e as Error;
       Log.e(`ui boot failed: ${err.message}`);
+    }
+
+    // ★ 先等自检自动登录落定，再读解锁态。
+    //   不做这一步就是竞态：EntryAbility.onCreate 里的自检登录是异步的，
+    //   这里可能先跑完并读到"锁定"时的旧值，于是**自检启动也会停在登录页** ——
+    //   表现是十套脚本全部挂在第一步，看着像登录门做坏了。
+    await Auth.settle();
+    this.unlocked = await Auth.isUnlocked();
+    if (!this.unlocked) {
+      // 未解锁要**立刻**把卡片推成脱敏态。
+      // 不推这一下，卡片还挂着上一次解锁时渲染的完整内容（公司名就在桌面上摆着），
+      // 得等下一次心跳（最长 30 分钟）才会变 —— 而"锁"的语义是"现在就不该看见"。
+      WidgetRefresher.refreshAll(WidgetRefresher.contextOf(this.getUIContext()));
     }
 
     const rest: number = Index.SPLASH_MIN_MS - (Date.now() - t0);
@@ -217,7 +265,7 @@ struct Index {
   }
 
   /** 紧急度 → 颜色。语义值由 WidgetData 给，UI 这一层才决定用什么颜色。 */
-  private levelColor(): string {
+  private levelColor(): Resource {
     if (this.bLevel === 'past' || this.bLevel === 'urgent') {
       return Palette.DANGER;
     }
@@ -370,8 +418,29 @@ struct Index {
       }
       .tabBar(this.barStyle('复盘'))
 
+      // 助手排在「我的」前面：它是主场景之一，但用户身份那点东西应该永远在最后一个 Tab 上 ——
+      // 那是一个"回得了家"的位置，来回翻页时最好找。
       TabContent() {
-        ProfileView({ tick: this.tick, onChanged: (): void => this.bumpAndPush() })
+        AssistantView({
+          tick: this.tick,
+          onChanged: (): void => this.bump()
+        })
+      }
+      .tabBar(this.barStyle('助手'))
+
+      TabContent() {
+        ProfileView({
+          tick: this.tick,
+          onChanged: (): void => this.bumpAndPush(),
+          onOpenSettings: (): void => {
+            this.inSettings = true;
+          },
+          // 「最近要跑」的出口。地图是主 Tab（index 1），切过去比在个人页里
+          // 重画一张小地图省事，也不会和真地图出现两套坐标。
+          onOpenMap: (): void => {
+            this.curTab = 1;
+          }
+        })
       }
       .tabBar(this.barStyle('我的'))
     }
@@ -469,6 +538,28 @@ struct Index {
     Column() {
       if (!this.ready) {
         this.splash()
+      } else if (!this.unlocked) {
+        // 登录门拦在**渲染这一层**：数据、卡片、哨兵全都不受影响，
+        // 挡住的只是"没解锁就看不到界面"。
+        LoginView({
+          onUnlocked: (): void => {
+            this.unlocked = true;
+            // 顺手把卡片推一次。卡片在未解锁时是脱敏的（见 WidgetData），
+            // 不推这一下，它得等下一次心跳（最长 30 分钟）才恢复完整内容 ——
+            // 用户会觉得"我明明解锁了，卡片怎么还是马赛克"。
+            const ctx: common.UIAbilityContext | undefined =
+              WidgetRefresher.contextOf(this.getUIContext());
+            WidgetRefresher.refreshAll(ctx);
+          }
+        })
+      } else if (this.inSettings) {
+        SettingsView({
+          tick: this.tick,
+          onChanged: (): void => this.bumpAndPush(),
+          onBack: (): void => {
+            this.inSettings = false;
+          }
+        })
       } else if (this.hover && !this.compact) {
         // 悬停且系统给了整屏：上方简报 + 下方内容，中间留出折痕的安全距离
         this.briefingPane()
