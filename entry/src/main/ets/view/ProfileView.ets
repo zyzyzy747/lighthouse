@@ -1,19 +1,36 @@
-import { promptAction } from '@kit.ArkUI';
-import { formProvider } from '@kit.FormKit';
-import { common, Want } from '@kit.AbilityKit';
-import { BusinessError } from '@kit.BasicServicesKit';
-import { Palette, Metrics } from '../common/Theme';
+import { Palette, Metrics, Tint } from '../common/Theme';
 import { ApplicationRepo, FunnelStat } from '../repository/ApplicationRepo';
 import { ReviewRepo } from '../repository/ReviewRepo';
 import { EventRepo } from '../repository/EventRepo';
-import { DbHelper } from '../model/DbHelper';
-import { DemoData } from '../service/DemoData';
-import { DeepSeekClient } from '../service/DeepSeekClient';
-import { WidgetRefresher, FORM_MAIN, FORM_MINI } from '../service/WidgetRefresher';
-import { Sentinel, SentinelSettings, SentinelReport, LEAD_CHOICES, leadLabel } from '../service/Sentinel';
-import { Notifier } from '../service/Notifier';
-import { AiResult, ChatMessage } from '../common/AiTypes';
+import { KvRepo } from '../repository/KvRepo';
+import { AvatarStore } from '../service/AvatarStore';
+import { Application, EventNode, getEventTypeMeta, getStatusMeta } from '../common/Types';
+import { humanDeadline, dayDiff } from '../common/Utils';
 import { Log } from '../common/Logger';
+
+/**
+ * 资质标注。这是**已核验的事实**（编码可在华为开发者官网查），不是装饰。
+ * ⛔ 别往这里加没真正拿到过的赛事或证书。
+ */
+const CERT_TEXT: string = '华为 HarmonyOS 应用开发者 · 高级认证';
+/** 交稿署名。比赛信息只在这里出现一次，改队名只需改这一行 */
+const FOOT_TEXT: string = '灯塔 v1.0 · 想睡觉队';
+
+/** 跟进提醒的阈值：投出去这么多天还没动静，就该催了 */
+const STALE_DAYS: number = 7;
+
+/** 漏斗的一个刻度。ArkTS 的 ForEach 要真正的类/接口，不能用匿名对象字面量 */
+class FunnelStep {
+  label: string = '';
+  value: number = 0;
+  color: Resource = Palette.PRIMARY;
+
+  constructor(label: string, value: number, color: Resource) {
+    this.label = label;
+    this.value = value;
+    this.color = color;
+  }
+}
 
 /** @Styles 只能用通用属性 */
 @Styles
@@ -24,139 +41,77 @@ function panel() {
   .width('100%')
 }
 
-/** 统计行：宽度铺满 + 上下留白 */
-@Styles
-function kvRowBox() {
-  .width('100%')
-  .padding({ top: 7, bottom: 7 })
-}
-
 /** ⚠ fontColor/fontSize 是 Text 专有属性，必须走 @Extend(Text) */
 @Extend(Text)
-function pvCardHead() {
+function cardHead() {
   .fontSize(13)
   .fontColor(Palette.TX_3)
-  .width('100%')
 }
 
 @Extend(Text)
-function kvLabel() {
-  .fontSize(13.5)
+function chipText() {
+  .fontSize(11)
   .fontColor(Palette.TX_2)
-}
-
-@Extend(Text)
-function kvValue() {
-  .fontSize(13.5)
-  .fontWeight(FontWeight.Medium)
-}
-
-/** ⚠ placeholderColor/fontSize 是 TextInput 专有属性 */
-@Extend(TextInput)
-function pvField() {
   .backgroundColor(Palette.PANEL_2)
   .borderRadius(Metrics.CHIP_RADIUS)
-  .fontSize(14)
-  .fontColor(Palette.TX)
-  .placeholderColor(Palette.TX_3)
-  .height(44)
+  .padding({ left: 8, right: 8, top: 4, bottom: 4 })
 }
 
 /**
  * 我的页。
+ *
+ * 这里只回答两件事：**我是谁**、**我这阵子投得怎么样**。
+ * 所有开关（外观 / AI / 提醒 / 卡片 / 演示数据 / 关于）都搬去「设置」了 ——
+ * 它们是"改一次就再也不动"的东西，堆在个人页里只会把真正要看的数字挤出屏幕。
+ *
+ * 布局取舍（2026-09-22 实测后重做）：
+ *   改前只有三张卡，内容总高 463vp，而可视区 663vp。ArkUI 的 `Scroll` 在内容不足一屏时
+ *   **会把内容垂直居中**，于是上下各空 100vp（实测 350px / 351px，差 1px），
+ *   看起来就是"内容挤在中间"。两处一起治：
+ *     ① `.align(Alignment.Top)` —— 把内容钉到顶部（治标，空白归到一处）；
+ *     ② 「我的数据」从 5 行干列表改成**投递漏斗**，再补「最近要跑」「该催一催了」——
+ *        治本：空白只能靠**有信息量的内容**去占。
+ *   ⛔ 别用 SpaceBetween 或拉高卡片去"填满"：用空白填空白，只会让内容更稀、更难看。
  *
  * ⚠ 踩坑记录（务必保留这个写法）：
  * ArkUI V1 的 @Builder **按值传参不会建立响应式依赖** ——
  * 形如 `this.kvRow('投递记录', `${this.funnel.total} 条`, c)` 的写法，
  * @State funnel 变化后 Builder 内的文字**不会刷新**（组件重建时才更新，
  * 表现为"点完按钮数字不动，切走再切回才对"）。
- * 因此所有动态数字一律用 @Extend 属性 + 内联 Row 输出，不走带参 @Builder。
+ * 因此所有动态数字一律用**无参 @Builder + @Extend 属性 + 内联节点**输出。
  */
 @Component
 export struct ProfileView {
   @Prop @Watch('onTick') tick: number = 0;
   onChanged: () => void = (): void => {};
+  /** 去设置页。设置是二级页，不占底部 Tab。 */
+  onOpenSettings: () => void = (): void => {};
+  /** 去地图页。「最近要跑」的出口 —— 地图是主 Tab，跳过去比在卡片里画小图更省 */
+  onOpenMap: () => void = (): void => {};
 
   @State funnel: FunnelStat = new FunnelStat();
   @State reviewCount: number = 0;
   @State analyzed: number = 0;
   @State pendingNodes: number = 0;
-  @State busy: boolean = false;
+  /** 最近的待办节点（最多 3 条） */
+  @State nextNodes: EventNode[] = [];
+  /** 投出去太久没动静的（卡片里最多列 2 条）。空数组 ⇒ 整张卡不出现 */
+  @State stale: Application[] = [];
+  /** 符合条件的**总数**。⚠ 不能拿 `stale.length` 当总数 —— 那是截断后的，会少报 */
+  @State staleTotal: number = 0;
 
-  /* ---- 节奏哨兵 ----
-   * ⚠ 这些偏好刻意用**独立的基础类型 @State**，不塞进 SentinelSettings 实例：
-   *   对象成员的变化能不能触发刷新取决于框架对 class 的一层观测，
-   *   而布尔/数字是确定会刷的。这个坑在本页已经踩过一次（见文件头 @Builder 那段），
-   *   能避就避。
-   */
-  @State sEnabled: boolean = true;
-  @State sLead: number = 24;
-  @State sTwoStage: boolean = true;
-  @State sDnd: boolean = true;
-  @State sDndStart: number = 22;
-  @State sDndEnd: number = 8;
-  @State sPermission: boolean = false;   // 系统通知是否已授权
-  @State sTotal: number = 0;             // 系统里当前排着的提醒数
-  @State sPreview: string[] = [];        // 将会排出的提醒预览
-  @State sSyncing: boolean = false;
-  @State sLastMessage: string = '';
-  /** 系统代理提醒被拒的条数。>0 表示本机不支持，界面要如实说降级，不能假装排上了。 */
-  @State sFailed: number = 0;
-  @State sDiagnose: string = '';
-  /** 宽屏双栏。⚠ @StorageProp 的参数必须写字面量（编译期求值），不能传常量变量 */
-  @StorageProp('lhTwoPane') twoPane: boolean = false;
-
-  /* ---- AI 设置相关 ---- */
-  @State aiReady: boolean = false;       // 云端是否可用（有 key 且开关打开）
-  @State aiAllowed: boolean = true;      // 用户是否允许联网
-  @State aiKeyTail: string = '';         // 密钥尾号，仅用于回显确认
-  @State aiSource: string = '';          // 密钥来源说明
-  @State showKeyInput: boolean = false;
-  @State keyInput: string = '';
-  @State testing: boolean = false;
-  @State testResult: string = '';
-  @State testOk: boolean = false;
+  /** 档案只在设置页里改，这里负责显示。 */
+  @State pfName: string = '';
+  @State pfTarget: string = '';
+  /** 自定义头像的 uri；空串 ⇒ 用内置默认头像。同样只在设置页里改。 */
+  @State avatarSrc: string = '';
 
   aboutToAppear(): void {
-    // 兜一层竞态：EntryAbility.onCreate 里的 load() 是异步的。若用户在启动瞬间就切到本页，
-    // syncAiState() 会看到还没读进来的空 key，界面误报「未配置密钥」。
-    // 这里幂等地再读一次（只是读 preferences，开销可忽略），读完再刷新。
-    const ctx: common.Context | undefined = this.uiContext();
-    if (ctx === undefined) {
-      this.reload();
-      return;
-    }
-    DeepSeekClient.get().load(ctx)
-      .then(() => {
-        this.reload();
-      })
-      .catch((err: Error) => {
-        Log.w(`AI 偏好重载失败，沿用现有状态：${err.message}`);
-        this.reload();
-      });
+    this.reload();
   }
 
   onTick(): void {
     this.reload();
-  }
-
-  private uiContext(): common.Context | undefined {
-    const ctx: common.Context | undefined = this.getUIContext().getHostContext();
-    return ctx;
-  }
-
-  private syncAiState(): void {
-    const c: DeepSeekClient = DeepSeekClient.get();
-    this.aiReady = c.isCloudEnabled();
-    this.aiAllowed = c.isCloudAllowed();
-    this.aiKeyTail = c.keyTail();
-    if (!c.hasKey()) {
-      this.aiSource = '未配置密钥，当前使用本地引擎';
-    } else if (this.aiKeyTail.length > 0) {
-      this.aiSource = `密钥尾号 ${this.aiKeyTail}`;
-    } else {
-      this.aiSource = '密钥已配置';
-    }
   }
 
   private async reload(): Promise<void> {
@@ -165,629 +120,314 @@ export struct ProfileView {
       this.reviewCount = await ReviewRepo.count();
       this.analyzed = await ReviewRepo.analyzedCount();
       this.pendingNodes = await EventRepo.pendingCount();
-      this.syncAiState();
-      await this.reloadSentinel();
+      this.nextNodes = await EventRepo.upcoming(3);
+      const s: Application[] = await ApplicationRepo.staleApplied(STALE_DAYS);
+      this.staleTotal = s.length;
+      this.stale = s.length > 2 ? [s[0], s[1]] : s;
+      const all: Record<string, string> = await KvRepo.getAll();
+      this.pfName = all['profile_name'] === undefined ? '' : all['profile_name'];
+      this.pfTarget = all['profile_target'] === undefined ? '' : all['profile_target'];
+      this.avatarSrc = await AvatarStore.imageSrc();
     } catch (e) {
       const err: Error = e as Error;
       Log.e(`ProfileView reload failed: ${err.message}`);
     }
   }
 
-  /* ==================== 节奏哨兵 ==================== */
+  /* ======================= 取值（Builder 内不能声明局部变量） ======================= */
 
-  private async reloadSentinel(): Promise<void> {
-    const ctx: common.Context | undefined = this.uiContext();
-    if (ctx === undefined) {
-      return;
-    }
-    try {
-      const s: SentinelSettings = await Sentinel.load(ctx);
-      this.sEnabled = s.enabled;
-      this.sLead = s.leadHours;
-      this.sTwoStage = s.twoStage;
-      this.sDnd = s.dndEnabled;
-      this.sDndStart = s.dndStart;
-      this.sDndEnd = s.dndEnd;
-      this.sPermission = await Notifier.isEnabled();
-      this.sTotal = await Sentinel.plannedCount(ctx);
-      this.sPreview = await Sentinel.preview(ctx);
-      // ★ 从库里把「代理提醒能不能用」读回来，而不是等某次交互的返回值。
-      //   后台自动 sync（onForeground）那次没人接收 rep，若不读库，
-      //   用户进这一页时 sFailed 恒为 0 ⇒ 降级提示不显示 ⇒ 用户以为会被提醒。
-      const agent: SentinelReport = await Sentinel.agentStatus(ctx);
-      this.sFailed = agent.failed;
-      this.sDiagnose = agent.diagnose;
-    } catch (e) {
-      const err: Error = e as Error;
-      Log.w(`哨兵状态读取失败：${err.message}`);
-    }
-  }
-
-  private settingsNow(): SentinelSettings {
-    const s: SentinelSettings = new SentinelSettings();
-    s.enabled = this.sEnabled;
-    s.leadHours = this.sLead;
-    s.twoStage = this.sTwoStage;
-    s.dndEnabled = this.sDnd;
-    s.dndStart = this.sDndStart;
-    s.dndEnd = this.sDndEnd;
-    return s;
+  /** 四个刻度。数字全部来自仓库，**不在 UI 里另算一套**，否则两页对不上 */
+  private steps(): FunnelStep[] {
+    return [
+      new FunnelStep('投递', this.funnel.total, Palette.PRIMARY),
+      new FunnelStep('推进', this.funnel.active, Palette.PURPLE),
+      new FunnelStep('面试', this.funnel.interview, Palette.ACCENT),
+      new FunnelStep('Offer', this.funnel.offer, Palette.OK)
+    ];
   }
 
   /**
-   * 改设置 → 立刻落盘 → 重排。
-   *
-   * 为什么每次都重排而不是等下次进应用：用户把提前量从 2 天改成 1 小时，
-   * 期望的是"现在就按新规则算"，而不是"下次再说"。sync 内部按差分只动变化的部分，
-   * 所以这里不心疼调用次数。
+   * 刻度条的宽度（百分比）。
+   * 下限留 10%：值为 0 的那一档如果宽度真是 0，视觉上会像"卡片缺了一块"。
    */
-  private async applySentinel(label: string): Promise<void> {
-    const ctx: common.Context | undefined = this.uiContext();
-    if (ctx === undefined) {
-      return;
-    }
-    try {
-      await Sentinel.save(ctx, this.settingsNow());
-      const rep: SentinelReport = await Sentinel.sync(ctx);
-      this.sLastMessage = rep.message;
-      this.sFailed = rep.failed;
-      this.sDiagnose = rep.diagnose;
-      Log.i(`哨兵设置已改（${label}）：${rep.message}`);
-      await this.reloadSentinel();
-    } catch (e) {
-      const err: Error = e as Error;
-      promptAction.showToast({ message: `设置未生效：${err.message}` });
-    }
+  private pct(v: number): number {
+    const base: number = this.funnel.total > 0 ? this.funnel.total : 1;
+    return Math.max(10, Math.round(v * 100 / base));
   }
 
-  /** 「立刻评估」：手动挡。演示时不必等卡片那 30 分钟的心跳。 */
-  private async syncSentinelNow(): Promise<void> {
-    if (this.sSyncing) {
-      return;
-    }
-    const ctx: common.Context | undefined = this.uiContext();
-    if (ctx === undefined) {
-      return;
-    }
-    this.sSyncing = true;
-    try {
-      const fired: number = await Sentinel.evaluate(ctx, '手动');
-      const rep: SentinelReport = await Sentinel.sync(ctx);
-      this.sFailed = rep.failed;
-      this.sDiagnose = rep.diagnose;
-      const head: string = fired > 0 ? `已发出 ${fired} 条提醒` : '当前没有需要提醒的节点';
-      this.sLastMessage = rep.failed > 0 ? `${head}；${rep.message}` : head;
-      promptAction.showToast({ message: this.sLastMessage });
-    } catch (e) {
-      const err: Error = e as Error;
-      promptAction.showToast({ message: `同步失败：${err.message}` });
-    } finally {
-      this.sSyncing = false;
-      await this.reloadSentinel();
-    }
+  /** 面试转化率，直接用仓库算好的那份（分母口径是"真正投出去并推进过的"） */
+  private rateText(): string {
+    return `面试转化率 ${Math.round(this.funnel.interviewRate * 100)}%`;
   }
 
-  /**
-   * 申请通知授权。
-   * ⚠ 代理提醒（系统级排程）与即时通知都卡在这一步 —— 没授权时系统会抛 1700001，
-   *   报错信息不会说"是没授权"，所以界面上必须把这条状态直白地摆在用户眼前。
-   */
-  private async askPermission(): Promise<void> {
-    const ctx: common.UIAbilityContext | undefined = WidgetRefresher.contextOf(this.getUIContext());
-    if (ctx === undefined) {
-      return;
-    }
-    const on: boolean = await Notifier.requestEnable(ctx);
-    this.sPermission = on;
-    promptAction.showToast({ message: on ? '通知已开启' : '通知仍未开启，去系统设置里打开' });
-    if (on) {
-      await this.syncSentinelNow();
-    }
+  /** 还剩几天。和「快记」的倒计时同一口径，别另起一套 */
+  private leftDays(ts: number): string {
+    const d: number = dayDiff(ts);
+    return d <= 0 ? '今天' : `${d} 天`;
   }
 
-  /* ==================== AI 设置 ==================== */
-
-  private async saveKey(): Promise<void> {
-    const k: string = this.keyInput.trim();
-    if (k.length === 0) {
-      promptAction.showToast({ message: '先把密钥粘进来' });
-      return;
-    }
-    const ctx: common.Context | undefined = this.uiContext();
-    if (ctx === undefined) {
-      promptAction.showToast({ message: '拿不到应用上下文，重开一次试试' });
-      return;
-    }
-    try {
-      await DeepSeekClient.get().saveKey(ctx, k);
-      this.keyInput = '';
-      this.showKeyInput = false;
-      this.testResult = '';
-      this.syncAiState();
-      promptAction.showToast({ message: '密钥已保存，点「测试连接」验证一下' });
-    } catch (e) {
-      const err: Error = e as Error;
-      Log.e(`saveKey failed: ${err.message}`);
-      promptAction.showToast({ message: '保存失败' });
-    }
+  /** 已经静默几天 */
+  private quietDays(ts: number): number {
+    const d: number = -dayDiff(ts);
+    return d < 0 ? 0 : d;
   }
 
-  private async toggleCloud(on: boolean): Promise<void> {
-    const ctx: common.Context | undefined = this.uiContext();
-    this.aiAllowed = on;
-    if (ctx === undefined) {
-      return;
-    }
-    try {
-      await DeepSeekClient.get().saveAllowCloud(ctx, on);
-      this.syncAiState();
-    } catch (e) {
-      const err: Error = e as Error;
-      Log.e(`toggleCloud failed: ${err.message}`);
-    }
-  }
-
-  /** 一次极短的真实调用 —— 让用户在答辩前就能确认密钥和网络都通 */
-  private async testConn(): Promise<void> {
-    if (this.testing) {
-      return;
-    }
-    const c: DeepSeekClient = DeepSeekClient.get();
-    if (!c.hasKey()) {
-      this.testOk = false;
-      this.testResult = '还没有密钥，先填一个';
-      return;
-    }
-    if (!c.isCloudAllowed()) {
-      this.testOk = false;
-      this.testResult = '云端开关是关着的，先打开再测';
-      return;
-    }
-    this.testing = true;
-    this.testResult = '正在连接…';
-    try {
-      const msgs: ChatMessage[] = [
-        { role: 'user', content: '只回复两个字：可用' }
-      ];
-      const r: AiResult<string> = await c.chatRaw(msgs, 16, 0.1);
-      const ms: number = r.latencyMs !== undefined ? r.latencyMs : 0;
-      if (r.ok) {
-        this.testOk = true;
-        const reply: string = r.raw !== undefined ? r.raw.trim() : '';
-        this.testResult = `连接正常 · 用时 ${(ms / 1000).toFixed(1)}s · 模型回复「${reply}」`;
-      } else {
-        this.testOk = false;
-        const why: string = r.error !== undefined ? r.error : '未知原因';
-        this.testResult = `连接失败：${why}`;
-      }
-      Log.i(`AI 连接自检 ok=${r.ok} ${ms}ms`);
-    } catch (e) {
-      const err: Error = e as Error;
-      this.testOk = false;
-      this.testResult = `异常：${err.message}`;
-    } finally {
-      this.testing = false;
-    }
-  }
-
-  /* ==================== 桌面卡片 ==================== */
-
-  /**
-   * 拉起系统的卡片管理页，用户在里面点「添加至桌面」。
-   *
-   * 为什么不能一键直接加桌：加桌是用户的桌面主权，系统不提供绕过用户确认的接口
-   * （openFormManager 已经是官方给的最短路径）。所以这里把用户送到正确的地方，
-   * 而不是假装能代劳。
-   */
-  private addWidget(formName: string, dimension: number, label: string): void {
-    const want: Want = {
-      bundleName: 'com.wuit.lighthouse',
-      abilityName: 'EntryFormAbility',
-      parameters: {
-        'ohos.extra.param.key.form_dimension': dimension,
-        'ohos.extra.param.key.form_name': formName,
-        'ohos.extra.param.key.module_name': 'entry'
-      }
-    };
-    try {
-      formProvider.openFormManager(want);
-      Log.i(`已拉起卡片管理页：${label}`);
-    } catch (e) {
-      const err: BusinessError = e as BusinessError;
-      Log.e(`拉起卡片管理页失败 code=${err.code} msg=${err.message}`);
-      promptAction.showToast({ message: `打不开卡片管理页：${err.message}` });
-    }
-  }
-
-  /* ==================== 演示数据 ==================== */
-
-  private async loadDemo(): Promise<void> {
-    if (this.busy) {
-      return;
-    }
-    this.busy = true;
-    try {
-      const n: number = await DemoData.load();
-      await this.reload();
-      this.onChanged();
-      promptAction.showToast({ message: n > 0 ? `已载入 ${n} 条演示数据` : '库里已有记录，未覆盖' });
-    } catch (e) {
-      const err: Error = e as Error;
-      Log.e(`loadDemo failed: ${err.message}`);
-      promptAction.showToast({ message: '载入失败，看下日志' });
-    } finally {
-      this.busy = false;
-    }
-  }
-
-  private async clearDemo(): Promise<void> {
-    if (this.busy) {
-      return;
-    }
-    this.busy = true;
-    try {
-      await DemoData.clear();
-      await this.reload();
-      this.onChanged();
-      promptAction.showToast({ message: '演示数据已清除' });
-    } catch (e) {
-      const err: Error = e as Error;
-      Log.e(`clearDemo failed: ${err.message}`);
-    } finally {
-      this.busy = false;
-    }
-  }
-
-  private confirmWipe(): void {
-    AlertDialog.show({
-      title: '清空全部数据？',
-      message: '投递、节点、复盘会全部删除，无法恢复。演示前重置数据可以用这个。',
-      primaryButton: {
-        value: '取消',
-        action: (): void => {}
-      },
-      secondaryButton: {
-        value: '清空',
-        fontColor: Palette.DANGER,
-        action: (): void => {
-          this.wipe();
-        }
-      }
-    });
-  }
-
-  private async wipe(): Promise<void> {
-    try {
-      await DbHelper.wipe();
-      await this.reload();
-      this.onChanged();
-      promptAction.showToast({ message: '已清空' });
-    } catch (e) {
-      const err: Error = e as Error;
-      Log.e(`wipe failed: ${err.message}`);
-    }
-  }
-
-  /* ==================== UI ==================== */
+  /* ================================ 卡片 ================================ */
 
   @Builder
-  aiPanel() {
-    Column({ space: 10 }) {
-      Text('AI 分析引擎').pvCardHead()
-
-      // 状态行：用颜色和文案讲清楚"现在能不能用云端"
-      Row({ space: 7 }) {
-        Text(this.aiReady ? '●' : '○')
-          .fontSize(13)
-          .fontColor(this.aiReady ? Palette.OK : Palette.TX_3)
-        Text(this.aiReady ? '云端已就绪' : (this.aiAllowed ? '云端未就绪' : '云端已关闭'))
-          .fontSize(13.5)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.aiReady ? Palette.OK : Palette.TX_2)
-        Blank()
-        Text(this.aiSource)
-          .fontSize(11.5)
-          .fontColor(Palette.TX_3)
-      }
-      .width('100%')
-
-      Text('复盘原文交给 DeepSeek 归因，产出六维能力雷达。只在你点「生成雷达」时联网，其他一切都在本机。')
-        .fontSize(12.5)
-        .fontColor(Palette.TX_2)
-        .width('100%')
-        .lineHeight(19)
-
-      if (!this.aiReady) {
-        Text('没有云端也能用：会切到本地关键词引擎，雷达照样出，只是不做语义归因。断网演示不会翻车。')
-          .fontSize(11.5)
-          .fontColor(Palette.TX_3)
-          .width('100%')
-          .lineHeight(17)
-      }
-
-      // 密钥输入
-      if (this.showKeyInput) {
-        TextInput({ text: this.keyInput, placeholder: '粘贴 DeepSeek API Key（sk- 开头）' })
-          .pvField()
-          .type(InputType.Password)
-          .onChange((v: string) => {
-            this.keyInput = v;
-          })
-        Row({ space: 10 }) {
-          Text('取消')
-            .fontSize(13.5)
-            .fontColor(Palette.TX_3)
-            .padding({ top: 8, bottom: 8, left: 4, right: 10 })
-            .onClick(() => {
-              this.showKeyInput = false;
-              this.keyInput = '';
-            })
-          Blank()
-          Button('保存密钥')
-            .fontSize(14)
-            .fontColor(Palette.BG)
-            .backgroundColor(Palette.PRIMARY)
-            .height(40)
-            .onClick(() => {
-              this.saveKey();
-            })
-        }
-        .width('100%')
-      } else {
-        Button(this.aiReady ? '更换 API Key' : '填入 API Key')
-          .fontSize(14)
-          .fontColor(this.aiReady ? Palette.TX_2 : Palette.BG)
-          .backgroundColor(this.aiReady ? Color.Transparent : Palette.PRIMARY)
-          .borderWidth(this.aiReady ? 1 : 0)
-          .borderColor(Palette.LINE)
-          .height(40)
-          .width('100%')
-          .onClick(() => {
-            this.showKeyInput = true;
-          })
-      }
-
-      // 云端开关
-      Row() {
-        Column({ space: 2 }) {
-          Text('允许联网分析').fontSize(13.5).fontColor(Palette.TX)
-          Text('关掉后全程本地运算，数据绝不出设备')
-            .fontSize(11)
-            .fontColor(Palette.TX_3)
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-
-        Toggle({ type: ToggleType.Switch, isOn: this.aiAllowed })
-          .selectedColor(Palette.PRIMARY)
-          .onChange((on: boolean) => {
-            this.toggleCloud(on);
-          })
-      }
-      .width('100%')
-
-      // 连接自检 —— 答辩前跑一次就安心了
-      Row({ space: 10 }) {
-        Button(this.testing ? '测试中…' : '测试连接')
-          .fontSize(13.5)
-          .fontColor(Palette.PRIMARY)
-          .backgroundColor(Color.Transparent)
+  identityCard() {
+    Row({ space: 12 }) {
+      // 头像：用户在设置页换过就用自己的图，否则用内置默认图。
+      // ⚠ 两条分支都必须是 Image —— 混用 Image 与 Text 时宽高对齐口径不同，
+      //   右侧文字的垂直对齐会跟着飘。
+      if (this.avatarSrc.length > 0) {
+        Image(this.avatarSrc)
+          .width(52)
+          .height(52)
+          .borderRadius(26)
+          .objectFit(ImageFit.Cover)
           .borderWidth(1)
-          .borderColor(Palette.PRIMARY)
-          .height(38)
-          .layoutWeight(1)
-          .enabled(!this.testing)
-          .onClick(() => {
-            this.testConn();
-          })
-      }
-      .width('100%')
-
-      if (this.testResult.length > 0) {
-        Text(this.testResult)
-          .fontSize(11.5)
-          .fontColor(this.testOk ? Palette.OK : Palette.ACCENT)
-          .width('100%')
-          .lineHeight(17)
+          .borderColor(Palette.LINE)
+      } else {
+        Image($rawfile('avatar_default.png'))
+          .width(52)
+          .height(52)
+          .borderRadius(26)
+          .objectFit(ImageFit.Cover)
+          .borderWidth(1)
+          .borderColor(Palette.LINE)
       }
 
-      Text('端侧另有离线语音速记，录音不出设备 —— 能端侧的一律端侧，只有非结构化的人类语言才上云。')
-        .fontSize(11)
-        .fontColor(Palette.TX_3)
-        .width('100%')
-        .lineHeight(17)
-    }
-    .panel()
-  }
-
-  /* ==================== 节奏哨兵 ==================== */
-
-  @Builder
-  sentinelPanel() {
-    Column({ space: 10 }) {
-      Text('节奏哨兵').pvCardHead()
-      Text('到点由通知找你。心跳来自桌面卡片——系统每 30 分钟唤醒它一次，所以应用没打开也能提醒。')
-        .fontSize(12.5)
-        .fontColor(Palette.TX_2)
-        .width('100%')
-        .lineHeight(19)
-
-      // 授权状态必须显眼：没授权时所有提醒都是哑的，而系统报错不会说"是没授权"
-      Row({ space: 8 }) {
-        Text(this.sPermission ? '● 通知已开启' : '● 通知未开启，提醒发不出来')
+      Column({ space: 4 }) {
+        Text(this.pfName.length > 0 ? this.pfName : '还没有填称呼')
+          .fontSize(17)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.pfName.length > 0 ? Palette.TX : Palette.TX_3)
+        Text(this.pfTarget.length > 0 ? this.pfTarget : '目标方向也没填')
           .fontSize(12.5)
-          .fontColor(this.sPermission ? Palette.OK : Palette.DANGER)
-        Blank()
-        if (!this.sPermission) {
-          Button('去开启')
-            .fontSize(12.5)
-            .fontColor(Palette.BG)
-            .backgroundColor(Palette.PRIMARY)
-            .height(30)
-            .padding({ left: 14, right: 14 })
-            .onClick(() => {
-              this.askPermission();
-            })
-        }
+          .fontColor(Palette.TX_3)
+        // 资质。放在身份卡里而不是单开一卡：它本来就是"我是谁"的一部分，
+        // 而且这是评委一眼能看到的加分项。
+        Text(CERT_TEXT)
+          .fontSize(10.5)
+          .fontColor(Palette.PRIMARY)
+          .backgroundColor(Tint.PRIMARY)
+          .borderRadius(Metrics.CHIP_RADIUS)
+          .padding({ left: 7, right: 7, top: 3, bottom: 3 })
       }
-      .width('100%')
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+    }
+    .width('100%')
+    .panel()
+  }
 
-      Divider().color(Palette.LINE)
-
-      // 系统拒绝排程时如实降级，并把原因摊开 —— 假装"提醒已排上"是最坏的选择，
-      // 用户会因此真的错过面试。
-      if (this.sFailed > 0) {
-        Column({ space: 4 }) {
-          Text('系统级代理提醒不可用，已改由「卡片心跳 + 本地通知」承担')
-            .fontSize(12.5)
-            .fontColor(Palette.ACCENT)
-            .width('100%')
-          if (this.sDiagnose.length > 0) {
-            Text(this.sDiagnose)
-              .fontSize(11)
-              .fontColor(Palette.TX_3)
-              .width('100%')
-              .lineHeight(16)
-          }
-          Text('原因：代理提醒有管控配额，普通应用默认可用条数为 0，须邮件申请权益。' +
-            '影响：提醒精度从「分钟级」降到「30 分钟内」。')
-            .fontSize(11)
-            .fontColor(Palette.TX_3)
-            .width('100%')
-            .lineHeight(16)
-        }
-        .width('100%')
-        .padding(10)
-        .backgroundColor(Palette.PANEL_2)
-        .borderRadius(Metrics.CHIP_RADIUS)
-      }
-
+  /** 投递漏斗。四档 + 每档一条按比例的长度条 —— 一眼看出"投得多、进得少" */
+  @Builder
+  funnelCard() {
+    Column({ space: 10 }) {
       Row() {
-        Column({ space: 3 }) {
-          Text('哨兵开关').fontSize(13.5).fontColor(Palette.TX)
-          Text('关掉会撤下所有已排的系统提醒').fontSize(11).fontColor(Palette.TX_3)
-        }
-        .alignItems(HorizontalAlign.Start)
+        Text('我的数据').cardHead()
         Blank()
-        Toggle({ type: ToggleType.Switch, isOn: this.sEnabled })
-          .selectedColor(Palette.PRIMARY)
-          .onChange((on: boolean) => {
-            this.sEnabled = on;
-            this.applySentinel('开关');
-          })
+        Text(this.rateText())
+          .fontSize(11.5)
+          .fontColor(Palette.PRIMARY)
       }
       .width('100%')
 
-      if (this.sEnabled) {
-        Column({ space: 6 }) {
-          Text('提前多久提醒').fontSize(13.5).fontColor(Palette.TX)
-          Row({ space: 8 }) {
-            // ⚠ key 里带上"是否选中"：只用小时数做 key 时，改选中项不会重建这些节点
-            ForEach(LEAD_CHOICES, (h: number) => {
-              Text(leadLabel(h))
-                .fontSize(12.5)
-                .fontColor(this.sLead === h ? Palette.BG : Palette.TX_2)
-                .backgroundColor(this.sLead === h ? Palette.PRIMARY : Palette.PANEL_2)
-                .borderRadius(Metrics.CHIP_RADIUS)
-                .textAlign(TextAlign.Center)
-                .height(34)
-                .layoutWeight(1)
-                .onClick(() => {
-                  this.sLead = h;
-                  this.applySentinel('提前量');
-                })
-            }, (h: number) => `lead-${h}-${this.sLead === h}`)
-          }
-          .width('100%')
-        }
-        .alignItems(HorizontalAlign.Start)
-        .width('100%')
+      Row({ space: 10 }) {
+        ForEach(this.steps(), (s: FunnelStep) => {
+          Column({ space: 5 }) {
+            Text(`${s.value}`)
+              .fontSize(24)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(Palette.TX)
+            // 轨道 + 填充两层：只画填充的话，比例感全靠脑补
+            Row() {
+              Row()
+                .width(`${this.pct(s.value)}%`)
+                .height(5)
+                .backgroundColor(s.color)
+                .borderRadius(3)
+            }
+            .width('100%')
+            .height(5)
+            .backgroundColor(Palette.PANEL_2)
+            .borderRadius(3)
 
-        Row() {
-          Column({ space: 3 }) {
-            Text('开始前 1 小时再提醒一次').fontSize(13.5).fontColor(Palette.TX)
-            Text('只对面试和笔试生效，截止日提前 1 小时没意义').fontSize(11).fontColor(Palette.TX_3)
-          }
-          .alignItems(HorizontalAlign.Start)
-          .layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.sTwoStage })
-            .selectedColor(Palette.PRIMARY)
-            .onChange((on: boolean) => {
-              this.sTwoStage = on;
-              this.applySentinel('二次提醒');
-            })
-        }
-        .width('100%')
-
-        Row() {
-          Column({ space: 3 }) {
-            Text(`免打扰 ${this.sDndStart}:00–${this.sDndEnd}:00`).fontSize(13.5).fontColor(Palette.TX)
-            Text('落在静默时段的提醒整体顺延到早上，但不会晚过事件本身')
-              .fontSize(11)
+            Text(s.label)
+              .fontSize(11.5)
               .fontColor(Palette.TX_3)
           }
-          .alignItems(HorizontalAlign.Start)
           .layoutWeight(1)
-          Toggle({ type: ToggleType.Switch, isOn: this.sDnd })
-            .selectedColor(Palette.PRIMARY)
-            .onChange((on: boolean) => {
-              this.sDnd = on;
-              this.applySentinel('免打扰');
-            })
-        }
-        .width('100%')
+          .alignItems(HorizontalAlign.Center)
+          // ⚠⚠ key 里**必须带上 value**。ForEach 是按 key 缓存的：只写 `fs-投递` 的话，
+          //   数据到位后 key 没变 ⇒ 这一格**不会重建**，屏幕上是首次渲染时的 0，
+          //   而同一张卡里不在 ForEach 内的「面试转化率」却正常刷新 ——
+          //   表现为"数字全是 0，百分比却是对的"这种自相矛盾的画面。
+          //   （MapView 的 `bar-${status}-${count}` 早就是这么写的，原因相同。）
+        }, (s: FunnelStep) => `fs-${s.label}-${s.value}`)
       }
+      .width('100%')
+      .alignItems(VerticalAlign.Bottom)
 
-      if (this.sEnabled) {
-        Button(this.sSyncing ? '评估中…' : '立刻评估提醒')
-          .fontSize(14)
-          .fontColor(Palette.BG)
-          .backgroundColor(Palette.PRIMARY)
-          .height(40)
-          .width('100%')
-          .enabled(!this.sSyncing)
-          .onClick(() => {
-            this.syncSentinelNow();
-          })
+      Divider().color(Palette.LINE).strokeWidth(1)
 
-        Text(this.sLastMessage.length > 0
-          ? this.sLastMessage
-          : `卡片每 30 分钟心跳一次，进入提醒档位的节点会自动弹通知`)
+      // 这三项不进漏斗（复盘和能力分析不是投递阶段），但都是"我这阵子干了什么"，别丢
+      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
+        Text(`待办节点 ${this.pendingNodes} 个`).chipText().margin({ right: 6, bottom: 6 })
+        Text(`面试复盘 ${this.reviewCount} 场`).chipText().margin({ right: 6, bottom: 6 })
+        Text(`能力分析 ${this.analyzed} 场`).chipText().margin({ right: 6, bottom: 6 })
+      }
+      .width('100%')
+    }
+    .panel()
+  }
+
+  /** 最近要跑。整块可点 ⇒ 去地图（那里有真地图和坐标） */
+  @Builder
+  nextCard() {
+    Column({ space: 9 }) {
+      Row() {
+        Text('最近要跑').cardHead()
+        Blank()
+        Text('去看地图 ›')
           .fontSize(11.5)
-          .fontColor(this.sLastMessage.length > 0 ? Palette.PRIMARY : Palette.TX_3)
-          .width('100%')
-          .lineHeight(17)
+          .fontColor(Palette.PRIMARY)
+      }
+      .width('100%')
+      .onClick(() => {
+        this.onOpenMap();
+      })
 
-        if (this.sPreview.length > 0) {
-          Column({ space: 4 }) {
-            ForEach(this.sPreview, (line: string, idx: number) => {
-              Row({ space: 6 }) {
-                Text('·').fontSize(12).fontColor(Palette.TX_3)
-                Text(line)
-                  .fontSize(11.5)
-                  .fontColor(Palette.TX_2)
-                  .layoutWeight(1)
-                  .maxLines(1)
-                  .textOverflow({ overflow: TextOverflow.Ellipsis })
-              }
-              .width('100%')
-            }, (line: string, idx: number) => `pv-${idx}-${line}`)
+      if (this.nextNodes.length === 0) {
+        Text('没有待办节点。去「快记」补一个笔试或面试时间，这里会按倒计时排好。')
+          .fontSize(11.5)
+          .fontColor(Palette.TX_3)
+          .lineHeight(17)
+          .width('100%')
+      } else {
+        ForEach(this.nextNodes, (e: EventNode) => {
+          Row({ space: 9 }) {
+            // 左侧色条：用事件类型的颜色，一眼分清是笔试还是面试
+            Row()
+              .width(3)
+              .height(30)
+              .backgroundColor(getEventTypeMeta(e.type).color)
+              .borderRadius(2)
+
+            Column({ space: 3 }) {
+              Text(e.title)
+                .fontSize(13.5)
+                .fontColor(Palette.TX)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%')
+              Text(`${getEventTypeMeta(e.type).label} · ${humanDeadline(e.happenAt)}`)
+                .fontSize(11)
+                .fontColor(Palette.TX_3)
+                .width('100%')
+            }
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1)
+
+            Text(this.leftDays(e.happenAt))
+              .fontSize(11.5)
+              .fontColor(Palette.ACCENT)
+              .backgroundColor(Tint.ACCENT)
+              .borderRadius(Metrics.CHIP_RADIUS)
+              .padding({ left: 7, right: 7, top: 3, bottom: 3 })
           }
           .width('100%')
-        }
+          // ⚠ 同上一处：key 必须带上会变的内容，否则节点时间改了界面不跟着改
+        }, (e: EventNode) => `nx-${e.id}-${e.happenAt}-${e.title}`)
       }
     }
     .panel()
   }
 
-  /**
-   * 宽屏左列：我的数据 / 桌面卡片 / 节奏哨兵。
-   * 这三块是「我的状态」，右列是「操作与说明」——左右分开后，
-   * 调哨兵设置时不用先滚过一屏演示数据和关于信息。
-   */
+  /** 该催一催了。没东西可催时**整张卡不出现** —— 空态文案只会白占地方 */
   @Builder
-  colLeft() {
-    Column({ space: 12 }) {
+  staleCard() {
+    if (this.stale.length > 0) {
+      Column({ space: 9 }) {
+        Row() {
+          Text(`投出去 ${STALE_DAYS} 天没动静`).cardHead()
+          Blank()
+          Text(`${this.staleTotal} 家`)
+            .fontSize(11.5)
+            .fontColor(Palette.DANGER)
+        }
+        .width('100%')
+
+        ForEach(this.stale, (a: Application) => {
+          Row({ space: 9 }) {
+            Column({ space: 3 }) {
+              Text(`${a.company} · ${a.position}`)
+                .fontSize(13.5)
+                .fontColor(Palette.TX)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%')
+              Text(`投出去 ${this.quietDays(a.updatedAt)} 天没有更新`)
+                .fontSize(11)
+                .fontColor(Palette.TX_3)
+                .width('100%')
+            }
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1)
+
+            // 这里只标状态，不做假按钮 —— 页面上不放"点了没反应"的东西
+            Text(getStatusMeta(a.status).label)
+              .fontSize(11.5)
+              .fontColor(Palette.ACCENT)
+              .backgroundColor(Tint.ACCENT)
+              .borderRadius(Metrics.CHIP_RADIUS)
+              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+          }
+          .width('100%')
+          // ⚠ key 带上 updatedAt：跟进之后"静默天数"要立刻变，不能停在旧节点上
+        }, (a: Application) => `st-${a.id}-${a.updatedAt}`)
+
+        Text('催之前先在「复盘」里看一眼上次聊到哪，别重复问同一个问题。')
+          .fontSize(11)
+          .fontColor(Palette.TX_3)
+          .width('100%')
+      }
+      .panel()
+    }
+  }
+
+  /** 设置入口。副标题把里面有什么写出来，省得用户猜。 */
+  @Builder
+  settingsEntry() {
+    Row({ space: 10 }) {
+      Column({ space: 3 }) {
+        Text('设置')
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(Palette.TX)
+        Text('外观 · AI 引擎 · 提醒 · 桌面卡片 · 关于')
+          .fontSize(11.5)
+          .fontColor(Palette.TX_3)
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+
+      Text('›')
+        .fontSize(22)
+        .fontColor(Palette.TX_3)
+    }
+    .width('100%')
+    .panel()
+    .onClick(() => {
+      this.onOpenSettings();
+    })
+  }
+
+  @Builder
+  content() {
+    Column({ space: Metrics.GAP }) {
       Row() {
         Text('我的')
           .fontSize(21)
@@ -796,199 +436,37 @@ export struct ProfileView {
         Blank()
       }
       .width('100%')
-      .padding({ top: 8 })
+      .padding({ top: 8, bottom: 2 })
 
-      // ── 我的数据：动态数字全部内联，不走带参 @Builder ──
-      Column({ space: 6 }) {
-        Text('我的数据').pvCardHead()
+      this.identityCard()
+      this.funnelCard()
+      this.nextCard()
+      this.staleCard()
+      this.settingsEntry()
 
-        Row() {
-          Text('投递记录').kvLabel()
-          Blank()
-          Text(`${this.funnel.total} 条`).kvValue().fontColor(Palette.TX)
-        }.kvRowBox()
-
-        Row() {
-          Text('推进中').kvLabel()
-          Blank()
-          Text(`${this.funnel.active} 条`).kvValue().fontColor(Palette.PRIMARY)
-        }.kvRowBox()
-
-        Row() {
-          Text('待办节点').kvLabel()
-          Blank()
-          Text(`${this.pendingNodes} 个`).kvValue().fontColor(Palette.ACCENT)
-        }.kvRowBox()
-
-        Row() {
-          Text('面试复盘').kvLabel()
-          Blank()
-          Text(`${this.reviewCount} 场`).kvValue().fontColor(Palette.TX)
-        }.kvRowBox()
-
-        Row() {
-          Text('已完成能力分析').kvLabel()
-          Blank()
-          Text(`${this.analyzed} 场`).kvValue().fontColor(Palette.OK)
-        }.kvRowBox()
-      }
-      .panel()
-
-      Column({ space: 10 }) {
-        Text('桌面卡片').pvCardHead()
-        Text('把「节奏哨兵」钉在主屏：不打开应用就能看到最近节点的倒计时。两种尺寸共用同一份数据，跟随系统深浅色。')
-          .fontSize(12.5)
-          .fontColor(Palette.TX_2)
-          .width('100%')
-          .lineHeight(19)
-        Row({ space: 10 }) {
-          Button('2×4 主卡')
-            .fontSize(14)
-            .fontColor(Palette.BG)
-            .backgroundColor(Palette.ACCENT)
-            .height(40)
-            .layoutWeight(1)
-            .onClick(() => {
-              this.addWidget(FORM_MAIN, 3, '2×4 主卡');
-            })
-          Button('2×2 小卡')
-            .fontSize(14)
-            .fontColor(Palette.TX_2)
-            .backgroundColor(Color.Transparent)
-            .borderWidth(1)
-            .borderColor(Palette.LINE)
-            .height(40)
-            .layoutWeight(1)
-            .onClick(() => {
-              this.addWidget(FORM_MINI, 2, '2×2 小卡');
-            })
-        }
+      // 收口。别让页面以一片空白结束 —— 顺便把队名留在评委眼前
+      Text(FOOT_TEXT)
+        .fontSize(11)
+        .fontColor(Palette.TX_3)
         .width('100%')
-      }
-      .panel()
-
-      // 卡片与通知是同一件事的两半：卡片常驻看全局，通知在关键节点主动叫你。
-      // 放在一起是让答辩时能一眼看出这是"服务找人"的完整闭环。
-      this.sentinelPanel()
+        .textAlign(TextAlign.Center)
+        .padding({ top: 2, bottom: 6 })
     }
     .width('100%')
-  }
-
-  /** 宽屏右列：演示数据 / AI 引擎 / 关于 / 危险操作 */
-  @Builder
-  colRight() {
-    Column({ space: 12 }) {
-
-      Column({ space: 10 }) {
-        Text('演示数据').pvCardHead()
-        Text('一键载入一组 Java 后端方向的投递样本，方便先看到成品形态。库里已有记录时不会覆盖。')
-          .fontSize(12.5)
-          .fontColor(Palette.TX_2)
-          .width('100%')
-          .lineHeight(19)
-        Button(this.busy ? '处理中…' : '载入演示数据')
-          .fontSize(14)
-          .fontColor(Palette.BG)
-          .backgroundColor(Palette.PRIMARY)
-          .height(40)
-          .width('100%')
-          .enabled(!this.busy)
-          .onClick(() => {
-            this.loadDemo();
-          })
-        Button('清除演示数据')
-          .fontSize(14)
-          .fontColor(Palette.TX_2)
-          .backgroundColor(Color.Transparent)
-          .borderWidth(1)
-          .borderColor(Palette.LINE)
-          .height(40)
-          .width('100%')
-          .enabled(!this.busy)
-          .onClick(() => {
-            this.clearDemo();
-          })
-      }
-      .panel()
-
-      this.aiPanel()
-
-      Column({ space: 6 }) {
-        Text('关于').pvCardHead()
-        Row() {
-          Text('作品名').kvLabel()
-          Blank()
-          Text('灯塔 Lighthouse').kvValue().fontColor(Palette.TX)
-        }.kvRowBox()
-        Row() {
-          Text('版本').kvLabel()
-          Blank()
-          Text('1.0.0（内测）').kvValue().fontColor(Palette.TX_2)
-        }.kvRowBox()
-        Row() {
-          Text('参赛').kvLabel()
-          Blank()
-          Text('2026 光谷杯鸿蒙生态创新大赛').kvValue().fontColor(Palette.TX_2)
-        }.kvRowBox()
-      }
-      .panel()
-
-      Column({ space: 8 }) {
-        Text('危险操作').pvCardHead()
-        Button('清空全部数据')
-          .fontSize(14)
-          .fontColor(Palette.DANGER)
-          .backgroundColor(Color.Transparent)
-          .borderWidth(1)
-          .borderColor(Palette.DANGER)
-          .height(40)
-          .width('100%')
-          .onClick(() => {
-            this.confirmWipe();
-          })
-      }
-      .panel()
-
-      Row().height(20)
-    }
-    .width('100%')
+    .padding({ left: Metrics.PAGE_PAD, right: Metrics.PAGE_PAD })
   }
 
   build() {
-    if (this.twoPane) {
-      // ── 宽屏双栏。两列各自滚动：改设置和查数据不需要在同一条长列表里来回翻。
-      Row({ space: Metrics.GAP }) {
-        Scroll() {
-          this.colLeft()
-        }
-        .layoutWeight(1)
-        .height('100%')
-        .scrollBar(BarState.Off)
-
-        Scroll() {
-          this.colRight()
-        }
-        .layoutWeight(1)
-        .height('100%')
-        .scrollBar(BarState.Off)
-      }
-      .width('100%')
-      .height('100%')
-      .padding({ left: Metrics.PAGE_PAD, right: Metrics.PAGE_PAD })
-      .backgroundColor(Palette.BG)
-    } else {
-      Scroll() {
-        Column({ space: 12 }) {
-          this.colLeft()
-          this.colRight()
-        }
-        .width('100%')
-        .padding({ left: Metrics.PAGE_PAD, right: Metrics.PAGE_PAD })
-      }
-      .width('100%')
-      .height('100%')
-      .scrollBar(BarState.Off)
-      .backgroundColor(Palette.BG)
+    // 个人页不拆双栏：卡片都是满宽的信息块，拆了反而两边都空。
+    Scroll() {
+      this.content()
     }
+    .width('100%')
+    .height('100%')
+    .scrollBar(BarState.Off)
+    .backgroundColor(Palette.BG)
+    // ⚠ 必须显式钉顶部：Scroll 在内容不足一屏时**默认垂直居中**，
+    //   表现为"上下各留一块一样大的空白"（实测 350px/351px）。详见文件头。
+    .align(Alignment.Top)
   }
 }
