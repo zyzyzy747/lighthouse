@@ -168,7 +168,11 @@ const DEMO_APPS: DemoApp[] = [
   new DemoApp('精测电子', 'Java 后端开发', '武汉', '官网', AppStatus.INTERVIEW, 15, 25, 12, 18, EventType.INTERVIEW,
     '', 'HR 说一面过了，等二面通知；面试官是中间件组的，问了不少并发'),
   new DemoApp('光庭信息', 'Java 开发工程师', '武汉', 'BOSS', AppStatus.WRITTEN, 12, 20, 9, 44, EventType.WRITTEN),
-  new DemoApp('中望软件', 'Java 开发', '广州', '内推', AppStatus.SCREEN, 18, 30, 7, 0, EventType.OTHER),
+  // ⚠ 中望软件这条故意投得久一点（9 天，updatedAt 落到 8 天前）：
+  //   「我的」页有一张「投出去 7 天没动静」的跟进提醒卡，阈值是 7 天。
+  //   演示库如果一条都够不着，那张卡在演示里永远看不见 ——
+  //   而这个"投出去石沉大海"的场景恰恰是秋招最常见的一种。
+  new DemoApp('中望软件', 'Java 开发', '广州', '内推', AppStatus.SCREEN, 18, 30, 9, 0, EventType.OTHER),
   new DemoApp('鼎捷软件', '开发工程师', '上海', '牛客', AppStatus.APPLIED, 13, 22, 5, 0, EventType.OTHER, DEMO_JD),
   new DemoApp('用友网络', 'Java 开发', '北京', '官网', AppStatus.REJECTED, 15, 25, 18, 0, EventType.OTHER),
   new DemoApp('金山办公', '服务端开发', '武汉', '内推', AppStatus.OFFER, 20, 35, 21, 0, EventType.OTHER),
