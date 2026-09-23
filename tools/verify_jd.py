@@ -110,21 +110,11 @@ def main():
     print(f"  install: {(i.stdout or '').strip()[:80]}")
     time.sleep(2)
 
-    vw.shell(f"aa start -a EntryAbility -b {BUNDLE}")
-    time.sleep(8)
-
-    # ── ② 载入演示数据
-    print("\n-- ② 载入演示数据 --")
-    lay = vw.dump_layout("jd0")
-    if not tap(lay, "我的"):
-        check(False, "", "点不到「我的」Tab")
-        return
-    time.sleep(3)
-    if not tap_scrolling("载入演示数据"):
-        check(False, "", "找不到「载入演示数据」按钮")
-        return
-    time.sleep(4)
-    print("  已点「载入演示数据」")
+    # 「载入演示数据」已搬进设置页 —— 走 lh_load_demo 开关，别去界面上找按钮
+    # （那要先切「我的」→进设置→滚动，长距离滚动在这个模拟器上不可靠）。
+    vw.shell(f"aa start -a EntryAbility -b {BUNDLE} --pi lh_autologin 1 --pi lh_load_demo 1")
+    time.sleep(10)
+    print("  演示数据已载入（lh_load_demo 开关）")
 
     # ── ③ 回快记页，长按「鼎捷软件」（演示数据里唯一带 JD 的那条）
     print("\n-- ③ 长按记录卡片，打开菜单 --")
