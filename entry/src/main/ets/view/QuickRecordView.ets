@@ -2,7 +2,7 @@ import { promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { Application, AppStatus, STATUS_LIST, StatusMeta, EventNode, EventType, EventTypeMeta, getStatusMeta, getEventTypeMeta, emptyApplication } from '../common/Types';
 import { JdSkillItem } from '../common/AiTypes';
-import { Palette, Metrics, CHANNEL_OPTIONS, CITY_OPTIONS } from '../common/Theme';
+import { Palette, Tint, Metrics, CHANNEL_OPTIONS, CITY_OPTIONS } from '../common/Theme';
 import { ApplicationRepo } from '../repository/ApplicationRepo';
 import { EventRepo } from '../repository/EventRepo';
 import { JdAnalyzer, JdOutcome } from '../service/JdAnalyzer';
@@ -60,7 +60,6 @@ interface NextNode {
   appId: number;
   type: string;
   label: string;     // 「面试」/「笔试」/「投递截止」/「其他」
-  color: string;
   when: string;      // 「明天 14:30」/「已过 2 天 · 09-18」
   countdown: string; // 「3 天 4 小时」/「已开始」
   days: number;      // 自然日差：0=今天，1=明天，负数=逾期
@@ -267,7 +266,6 @@ export struct QuickRecordView {
       appId: e.appId,
       type: e.type,
       label: meta.label,
-      color: meta.color,
       when: humanDeadline(e.happenAt),
       countdown: countdownText(e.happenAt),
       days: dayDiff(e.happenAt)
@@ -361,9 +359,49 @@ export struct QuickRecordView {
     return n === undefined ? '' : `${n.label} · ${n.when}`;
   }
 
-  private nextColor(appId: number): string {
+  /**
+   * 节点文字色。
+   *
+   * ⚠ 不再从 NextNode 里带一个 hex 字符串：走资源限定词后颜色必须是 `Resource`，
+   *   而 `Resource` 不能拼接、也不能跨文件存进普通数据类。所以这里按节点类型现查一次
+   *   —— 类型只有 4 种，查表比存一份"深浅各一套"的色值表干净。
+   */
+  private nextColor(appId: number): Resource {
     const n: NextNode | undefined = this.nextOf(appId);
-    return n === undefined ? Palette.TX_3 : n.color;
+    return n === undefined ? Palette.TX_3 : this.toneColor(n.type);
+  }
+
+  /** 文字底衬色（淡红底、淡橙底…）。与 nextColor 同一套色调，只是带了透明度。 */
+  private nextTint(appId: number): Resource {
+    const n: NextNode | undefined = this.nextOf(appId);
+    return n === undefined ? Tint.NEUTRAL : this.toneTint(n.type);
+  }
+
+  /** 节点类型 → 主色。与 `EVENT_TYPE_LIST` 的配色保持同一口径（截止红 / 笔试紫 / 面试橙）。 */
+  private toneColor(type: string): Resource {
+    if (type === EventType.DEADLINE) {
+      return Palette.DANGER;
+    }
+    if (type === EventType.WRITTEN) {
+      return Palette.PURPLE;
+    }
+    if (type === EventType.INTERVIEW) {
+      return Palette.ACCENT;
+    }
+    return Palette.TX_3;
+  }
+
+  private toneTint(type: string): Resource {
+    if (type === EventType.DEADLINE) {
+      return Tint.DANGER;
+    }
+    if (type === EventType.WRITTEN) {
+      return Tint.PURPLE;
+    }
+    if (type === EventType.INTERVIEW) {
+      return Tint.ACCENT;
+    }
+    return Tint.NEUTRAL;
   }
 
   /** 倒计时：逾期标红，3 天内标橙，其余灰 —— 一眼扫出「哪几家要来了」 */
@@ -492,7 +530,7 @@ export struct QuickRecordView {
     return '语音';
   }
 
-  private dictColor(): string {
+  private dictColor(): Resource {
     if (this.dictBusy()) {
       return Palette.DANGER;
     }
@@ -782,7 +820,7 @@ export struct QuickRecordView {
   }
 
   /** 匹配度配色：≥75 绿 / ≥50 琥珀 / 其余红。用中国用户的直觉（红=不达标） */
-  private scoreColor(): string {
+  private scoreColor(): Resource {
     if (this.jdScore >= 75) {
       return Palette.OK;
     }
@@ -792,7 +830,7 @@ export struct QuickRecordView {
     return Palette.DANGER;
   }
 
-  private statusColor(s: string): string {
+  private statusColor(s: string): Resource {
     if (s === '具备') {
       return Palette.OK;
     }
@@ -802,9 +840,15 @@ export struct QuickRecordView {
     return Palette.ACCENT;
   }
 
-  /** '#3DD68C' + '22' → '#223DD68C'（ArkUI 是 #AARRGGBB，透明度在前） */
-  private tint(color: string, aa: string): string {
-    return `#${aa}${color.substring(1)}`;
+  /** 与 statusColor 配套的淡底。见 common/Theme 里 Tint 的说明：透明度必须预先写在资源里。 */
+  private statusTint(s: string): Resource {
+    if (s === '具备') {
+      return Tint.OK;
+    }
+    if (s === '缺失') {
+      return Tint.DANGER;
+    }
+    return Tint.ACCENT;
   }
 
   /** 「共 N 项 · 待补 M 项」。待补 = 不是「具备」的都算，部分具备也需要补 */
@@ -1282,7 +1326,7 @@ export struct QuickRecordView {
             .fontColor(this.nextColor(app.id))
             .padding({ left: 7, right: 7, top: 2, bottom: 2 })
             .borderRadius(5)
-            .backgroundColor(this.tint(this.nextColor(app.id), '22'))
+            .backgroundColor(this.nextTint(app.id))
           Blank()
           Text(this.nextCountdown(app.id))
             .fontSize(11.5)
@@ -1577,7 +1621,7 @@ export struct QuickRecordView {
             .fontColor(this.statusColor(it.myStatus))
             .padding({ left: 8, right: 8, top: 3, bottom: 3 })
             .borderRadius(6)
-            .backgroundColor(this.tint(this.statusColor(it.myStatus), '22'))
+            .backgroundColor(this.statusTint(it.myStatus))
         }
         .width('100%')
         .alignItems(VerticalAlign.Center)
