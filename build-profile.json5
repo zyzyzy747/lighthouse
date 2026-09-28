@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:\\Users\\Administrator\\.ohos\\config\\default_Lighthouse_6urres7_WtBWHnFMHZmQcqPvVvhHkr_aRgrqD0BqazY=.cer",
+          "certpath": "C:/Users/Administrator/.ohos/config/default_Lighthouse_6urres7_WtBWHnFMHZmQcqPvVvhHkr_aRgrqD0BqazY=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B31CAC4A7312FD37CF7E0226BBAE17D86965BE9AAE63812644DF35625B01DEA63E2A3F2417230D6",
-          "profile": "C:\\Users\\Administrator\\.ohos\\config\\default_Lighthouse_6urres7_WtBWHnFMHZmQcqPvVvhHkr_aRgrqD0BqazY=.p7b",
+          "keyPassword": "0000001B4E29E5B3BBF304A183B28AFA8E06F20F881CDC073784BDAFD9E6EC7FA35D8CB0CB412E5C788E0C",
+          "profile": "C:/Users/Administrator/.ohos/config/lighthouseDebug.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\Administrator\\.ohos\\config\\default_Lighthouse_6urres7_WtBWHnFMHZmQcqPvVvhHkr_aRgrqD0BqazY=.p12",
-          "storePassword": "0000001B55E89FCF3A011A324AB45D1EF9734DCE3D91D4E9F6FA9FE86CC5494179139A80492B7AB234D5F3"
+          "storeFile": "C:/Users/Administrator/.ohos/config/default_Lighthouse_6urres7_WtBWHnFMHZmQcqPvVvhHkr_aRgrqD0BqazY=.p12",
+          "storePassword": "0000001BF994938E821F5ECB49B04BD1CA2D2F5381617FB1FF752D60F60F2925D4B2D2B89C5A7A8D1838EE"
         }
       }
     ],
